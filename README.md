@@ -50,11 +50,21 @@ Codex handles small checks directly and uses the Worker Skill for one-off delega
 
 ### Expert handoffs and corrections
 
-Codex chooses the number of experts and their roles. Independent read-only stages can run in parallel. A stage that depends on another expert's findings starts after Codex has checked the supporting evidence.
+Codex chooses the number of experts and their roles. Independent read-only stages can run in parallel. A stage that depends on another expert's findings starts after Codex has checked the supporting evidence. For each expert, Codex matches the role to the project rules and available skills, then defines the inputs, sources, expected deliverable, and checks in the handoff. Use the evidence in the result to verify which sources and skills the expert used.
 
 In a separate synthetic test, the first expert counted 52 eligible units. The reviewer held the result because the release threshold still needed a source citation. Codex sent a follow-up to the first expert's original session, obtained the approved threshold of 50, and had the reviewer clear the correction before dispatching the independent final check. The final verdict passed by two units.
 
 Orchestrator's `dsh_followup` keeps a correction in the original task. Handoffs carry the evidence and references the next expert needs. The Harness **Team Collaboration** switch controls workers within a single Harness session. The Codex-managed workflow coordinates across sessions with this switch off.
+
+### Research when local guidance is missing
+
+When the task permits internet access, Codex uses the available search tools to fill gaps in local rules or installed skills.
+
+1. Look up the official specification or maintainer documentation with a generic public query.
+2. Read the relevant community project's original documentation, source, or maintainer discussion. Record the version and license when considering reuse. Keep requirements from the specification distinct from the behavior of a particular implementation.
+3. Continue the authorized task with verified sources. Include the links and the checks that support the result. Install, enable, import, or run third-party skills and scripts only with separate authorization.
+
+A synthetic test exercised this path with eight JSON Pointer cases. Codex opened RFC 6901 and delegated an independent review. Harness used native search and page retrieval to inspect the RFC and community repositories. The read-only review matched the five expected values and three expected failures. Community sources were used as references, with the local skill list unchanged. [RFC 6901](https://www.rfc-editor.org/rfc/rfc6901.html)
 
 ## See progress and open the trace
 

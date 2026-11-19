@@ -19,7 +19,10 @@ SERVER = "dsh_orchestrator"
 TOOLS = ["dsh_delegate", "dsh_status", "dsh_wait", "dsh_tail", "dsh_followup", "dsh_release_workspace"]
 POLICY_START = "<!-- BEGIN local dsh-orchestrator delegation -->"
 POLICY_END = "<!-- END local dsh-orchestrator delegation -->"
-UPGRADABLE_POLICY = "1589010322b0a70402bb5a8209301a40d2250ead73dae486502cc695a08dec8b"
+UPGRADABLE_POLICIES = {
+    "1589010322b0a70402bb5a8209301a40d2250ead73dae486502cc695a08dec8b",
+    "b5725115daf03c8680b9ef240c87696752ff3ad06801012e04fe6d7cc4089b07",
+}
 WORKER_SOURCE = HERE / "skills/deepseek-harness-worker"
 INSIGHTS = "dsh-context"
 INSIGHTS_VERSION = "0.86.0"
@@ -106,7 +109,7 @@ def instruction_update(old, policy):
     normalized = current.replace("\r\n", "\n").strip()
     if normalized == policy:
         return old
-    if sha256(normalized.encode("utf8")).hexdigest() == UPGRADABLE_POLICY:
+    if sha256(normalized.encode("utf8")).hexdigest() in UPGRADABLE_POLICIES:
         return (before + POLICY_START + block + POLICY_END + after).encode("utf8")
     raise ValueError("The existing Codex delegation policy differs from this package. It was kept.")
 
