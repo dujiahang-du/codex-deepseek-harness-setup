@@ -20,6 +20,7 @@ TOOLS = ["dsh_delegate", "dsh_status", "dsh_wait", "dsh_tail", "dsh_followup", "
 POLICY_START = "<!-- BEGIN local dsh-orchestrator delegation -->"
 POLICY_END = "<!-- END local dsh-orchestrator delegation -->"
 UPGRADABLE_POLICIES = {
+    "3ebbf4fe46e9dbc27a66e9ee578d11d739cf38ae0aca0d5ac870907e0e713213",
     "1589010322b0a70402bb5a8209301a40d2250ead73dae486502cc695a08dec8b",
     "b5725115daf03c8680b9ef240c87696752ff3ad06801012e04fe6d7cc4089b07",
 }
@@ -136,6 +137,13 @@ def replace_instruction(path, old, updated):
             raise ctypes.WinError(ctypes.get_last_error())
 
 
+PREVIOUS_WORKER_FILE_HASHES = {
+    Path("SKILL.md"): "5a83332458469e3c28a77813484f350d31c84c403140151b0f12792a29af5df4",
+    Path("agents/openai.yaml"): "82459be0225d90a6716537aad3776e4289159b3b4f211ef67d4041b60dd0865c",
+    Path("scripts/run_worker.py"): "ec5a16282a9882366bf73cacd9ca934c5cc2b84344dd92cfc7ee1123ce75c0ef",
+}
+
+
 def worker_files(root):
     paths = list(root.rglob("*"))
     if any(p.is_symlink() or p.is_junction() for p in paths):
@@ -149,24 +157,33 @@ def worker_plan(source, codex, exe):
     required = {Path("SKILL.md"), Path("agents/openai.yaml"), Path("scripts/run_worker.py"),
                 Path("scripts/account.patch.yml")}
     if not required <= expected.keys():
-        raise ValueError("The setup package lacks the complete Codex worker Skill.")
+        raise ValueError("The knowledge base lacks the complete Codex worker Skill.")
     target = codex / "skills/deepseek-harness-worker"
     locator = codex / "deepseek-harness-worker.json"
     if any(p.is_symlink() or p.is_junction() for p in (target.parent, target, locator)):
         raise ValueError("The Codex worker destination or locator is redirected. It was kept.")
-    if target.exists() and (not target.is_dir() or worker_files(target) != expected):
-        raise ValueError("The existing Codex worker Skill differs from the setup package. It was kept.")
+    current = worker_files(target) if target.is_dir() else None
+    if target.exists() and current != expected:
+        if current is None or current.keys() != expected.keys() or any(
+            sha256(data.replace(b"\r\n", b"\n")).hexdigest() != PREVIOUS_WORKER_FILE_HASHES.get(relative)
+            for relative, data in current.items()
+            if data.replace(b"\r\n", b"\n") != expected[relative].replace(b"\r\n", b"\n")
+        ):
+            raise ValueError("The existing Codex worker Skill differs from the setup package. It was kept.")
     if locator.exists():
-        current = json.loads(locator.read_text(encoding="utf-8-sig"))
-        if (not isinstance(current, dict) or set(current) != {"harness_exe"}
-                or not isinstance(current["harness_exe"], str) or Path(current["harness_exe"]).resolve() != exe):
+        saved_locator = json.loads(locator.read_text(encoding="utf-8-sig"))
+        if (not isinstance(saved_locator, dict) or set(saved_locator) != {"harness_exe"}
+                or not isinstance(saved_locator["harness_exe"], str)
+                or Path(saved_locator["harness_exe"]).resolve() != exe):
             raise ValueError("The existing Codex worker locator differs from the selected Harness. It was kept.")
-    return target, locator, expected
+    return target, locator, expected, current
 
 
 def restore_worker(plan, exe):
-    target, locator, expected = plan
-    if not target.exists():
+    target, locator, expected, current = plan
+    if target.exists() != (current is not None) or (current is not None and worker_files(target) != current):
+        raise ValueError("The Codex worker Skill changed during installation. It was kept.")
+    if current is None:
         target.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="dsh-worker-", dir=target.parent) as directory:
             stage = Path(directory) / target.name
@@ -175,6 +192,19 @@ def restore_worker(plan, exe):
                 file.parent.mkdir(parents=True, exist_ok=True)
                 file.write_bytes(data)
             stage.rename(target)
+    elif current != expected:
+        backup = target.parent.parent / "integrations/dsh-orchestrator" / (
+            "backup-worker-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        )
+        backup.mkdir(parents=True)
+        for relative, data in current.items():
+            file = backup / relative
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_bytes(data)
+        for relative, data in expected.items():
+            if data != current[relative]:
+                replace_instruction(target / relative, current[relative], data)
+        print(f"Previous Codex Worker: {backup}")
     if not locator.exists():
         keep_or_create(locator, json.dumps({"harness_exe": exe.as_posix()}, ensure_ascii=False) + "\n")
 

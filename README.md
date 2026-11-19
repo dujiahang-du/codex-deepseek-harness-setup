@@ -1,8 +1,8 @@
 # Codex + DeepSeek Harness
 
-Give Codex a task in plain language. It decides whether to handle it directly, delegate a focused review to DeepSeek Harness, or coordinate several experts. Codex checks their evidence and can send a correction back to the original expert before passing the work on.
+Give Codex a task in plain language. It can handle a quick check, delegate a focused review, or coordinate several DeepSeek Harness experts. When you authorize a development change, Harness can implement it directly in the current Codex project. Codex sets the scope and verifies the result.
 
-Try it for release checks, document comparisons, and batch file reviews. The setup uses Windows x64, defaults to read-only delegation, and has been tested with **DeepSeek Harness 0.2.2-rc.5**.
+Use it for scoped development work, release checks, document comparisons, and batch file reviews. The setup uses Windows x64, defaults to read-only delegation, and has been tested with **DeepSeek Harness 0.2.2-rc.5**.
 
 > Audit this release packet against the approved rules. Verify the totals and cite the source rows. Choose any specialist reviews you need, keep the inputs read-only, and show me the final decision and its evidence.
 
@@ -19,13 +19,13 @@ python .\install.py --harness-exe "<absolute path to DeepSeek Harness.exe>" --no
 python .\install.py --harness-exe "<absolute path to DeepSeek Harness.exe>" --node-exe "<absolute path to node.exe>" --apply
 ```
 
-4. Start a new Codex chat and describe a read-only task, or run the [synthetic smoke test](#verify-with-synthetic-data) below. Ask for progress and a native trace to exercise the Orchestrator route.
+4. Start a new Codex chat in the project you want to work on. Ask for a read-only review or explicitly authorize a [project change](#authorized-project-changes). The [synthetic smoke tests](#verify-with-synthetic-data) cover both routes.
 
-Setup fetches the pinned bridge and its locked dependencies when needed. It uses `~/.codex` or your existing `CODEX_HOME`, reports conflicting custom files, and preserves them. The isolated launcher and its local state live under `integrations/dsh-orchestrator` in that root. The launcher uses your installed Harness and its local sign-in.
+Setup fetches the pinned bridge and its locked dependencies when needed. It uses `~/.codex` or your existing `CODEX_HOME`, backs up the Worker and policy when upgrading known versions, and preserves conflicting custom files. The isolated launcher and its local state live under `integrations/dsh-orchestrator` in that root. The launcher uses your installed Harness and its local sign-in.
 
 | Installed component | What it does |
 |---|---|
-| [Worker Skill](skills/deepseek-harness-worker/SKILL.md) | Runs a one-off Headless task and returns a structured result |
+| [Worker Skill](skills/deepseek-harness-worker/SKILL.md) | Runs a one-off Headless task with read-only access or explicitly authorized workspace edits |
 | [Orchestrator](launch.py) | Gives Codex a local MCP connection for delegation, progress, traces, and follow-ups |
 | [Delegation policy](codex-delegation-policy.md) | Adds task routing, handoff rules, and verification criteria to Codex's user instructions |
 
@@ -39,7 +39,7 @@ Setup fetches the pinned bridge and its locked dependencies when needed. It uses
 
 ## How Codex delegates
 
-Codex handles small checks directly and uses the Worker Skill for one-off delegation. It uses Orchestrator when a task needs progress updates, a native trace, or follow-ups. The supplied policy defaults to Simplified Chinese for titles, handoffs, and results. Ask for a different language in your task when needed.
+Codex handles small checks directly and uses the Worker Skill for one-off delegation. It uses Orchestrator for read-only work that needs progress updates, a native trace, or follow-ups. The supplied policy defaults to Simplified Chinese for titles, handoffs, and results. Ask for a different language in your task when needed.
 
 | Task | Harness mode | Model and reasoning |
 |---|---|---|
@@ -47,6 +47,12 @@ Codex handles small checks directly and uses the Worker Skill for one-off delega
 | Compare documents or summarize logs | Standard | Flash / High |
 | Read, filter, or summarize a batch of independent inputs | PTC | Flash / High |
 | Resolve conflicting evidence or evaluate interacting constraints | Standard | Pro / High |
+
+### Authorized project changes
+
+For a development task with write authorization, Codex checks the project rules, existing changes, and allowed files. It passes the current project's absolute directory to the Headless Worker with `--cwd` and enables Harness's native `workspace-write` for that run. The expert completes the assignment and reports changed files, checks, and any blockers together. Codex checks the files on disk, reviews the diff, and runs the relevant project checks before accepting the result.
+
+Read-only is the default for other tasks. Orchestrator runs read-only and can review the completed work. Installs, commits, and publication each follow the task's authorization.
 
 ### Expert handoffs and corrections
 
@@ -81,6 +87,8 @@ With Context Insights installed, open **Context Insights → All Sessions**, fin
 
 ## Verify with synthetic data
 
+### Read-only review
+
 Generate a temporary workspace and select the printed path when starting a new Codex chat.
 
 ```powershell
@@ -97,9 +105,17 @@ $fixture
 
 The expected result is **6 ready items totaling 96**. Verify that Codex initiated the delegation, the task completed as read-only, and the trace shows the source files being read. Codex selects the actual mode and model. Verify the input files match their pre-test contents.
 
+### Authorized file creation
+
+Create a temporary project with a `requirements.txt` that asks for a Python function `total(count)`. The first three tickets cost 12 cents each, further tickets cost 8 cents each, and negative counts raise `ValueError`. Add an `original.txt` file to check that existing files are preserved. Open that project in a new Codex chat and send this request.
+
+> Implement the function in requirements.txt. You may create tickets.py in this project. Preserve the existing files. Verify the result and report the path you actually changed.
+
+Check that the Headless Worker used `workspace-write`, Harness created `tickets.py` in that project, and Codex verified the output. In the synthetic test, the only new file was `tickets.py` and all six cases passed. Counts 0, 1, 3, 4, and 9 produced 0, 12, 36, 44, and 84 cents. A negative count raised `ValueError`.
+
 ## Data handling
 
-Headless and isolated Web profiles disable additional session-log uploads and feedback telemetry by default. Delegated tasks use Harness's native read-only permission. Cloud inference sends the prompt and context needed for the task. Supply excerpts you have authorized for that task. For work that must stay on the machine, use a verified local inference path and offline tools. [Harness privacy policy](https://www.deepseek.com/harness/privacy/) · [Official session-log documentation](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-log-deepseek/README.md)
+Headless and isolated Web profiles disable additional session-log uploads and feedback telemetry by default. Delegated tasks default to Harness's native read-only permission. Authorized Headless changes use native workspace-write for that run. Cloud inference sends the prompt and context needed for the task. Supply excerpts you have authorized for that task. For work that must stay on the machine, use a verified local inference path and offline tools. [Harness privacy policy](https://www.deepseek.com/harness/privacy/) · [Official session-log documentation](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-log-deepseek/README.md)
 
 Desktop plugins, desktop MCP servers, external programs, accounts, and chat histories are configured on each machine. After changing versions, use synthetic data to recheck permissions, routing, and privacy behavior.
 
@@ -107,7 +123,7 @@ Desktop plugins, desktop MCP servers, external programs, accounts, and chat hist
 
 Exit the relevant Codex chats and Harness windows. Run `codex mcp remove dsh_orchestrator` to remove the registration. Remove the managed delegation block between its start and end markers in `AGENTS.md`. Back up the Worker Skill, executable locator, isolated profile, and sessions before removing any data you no longer need.
 
-If you applied the Desktop privacy overlay, check for subsequent edits before restoring its backup, or undo just the marked privacy block.
+To roll back a known upgrade, use the Worker and policy backups printed by setup. If you applied the Desktop privacy overlay, check for subsequent edits before restoring its backup, or undo just the marked privacy block.
 
 ## Pinned source
 

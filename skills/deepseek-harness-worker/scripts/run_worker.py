@@ -1,4 +1,4 @@
-"""Delegate one read-only expert task to DeepSeek Harness and return its result."""
+"""Delegate one expert task to DeepSeek Harness, with read-only access by default."""
 import argparse
 import json
 import os
@@ -102,9 +102,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--harness-exe", help="Override the path to the native Harness executable")
     parser.add_argument("--cwd", type=Path, required=True, help="Absolute project or fixture directory")
-    parser.add_argument("--role", default="只读技术核对员", help="Expert role for this delegation")
+    parser.add_argument("--role", help="Expert role for this delegation")
+    parser.add_argument("--workspace-write", action="store_true",
+                        help="Use native workspace-write for explicitly authorized project edits")
     parser.add_argument("--task-kind", choices=ROUTES, default="analysis",
-                        help="Select the read-only Harness mode, account model, and reasoning effort")
+                        help="Select the Harness mode, account model, and reasoning effort")
     parser.add_argument("--skill", action="append", default=[], help="Installed Harness Skill ID; repeat if needed")
     parser.add_argument("--timeout", type=int, default=300, help="Seconds to allow the local Harness worker")
     parser.add_argument("--task", help="Task text; omit to read UTF-8 text from stdin")
@@ -118,28 +120,39 @@ def main():
         if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", skill_id):
             raise ValueError("Use the English kebab-case ID for each Harness Skill.")
     task = (args.task if args.task is not None else sys.stdin.buffer.read().decode("utf-8-sig")).strip()
-    if not task or not args.role.strip():
+    permission = "workspace-write" if args.workspace_write else "read-only"
+    default_role = "开发实现执行员" if args.workspace_write else "只读技术核对员"
+    role = (args.role if args.role is not None else default_role).strip()
+    if not task or not role:
         raise ValueError("Supply a bounded nonempty task and expert role.")
     exe, cli = runtime(args.harness_exe)
     skills = " ".join(f"/{skill_id}" for skill_id in dict.fromkeys(args.skill))
+    boundary = (
+        "仅在当前工作区和任务明确列出的可写范围内实现，保留既有用户修改。"
+        "在授权范围内连续完成任务，结束时统一报告修改文件、检查结果和未解决项。"
+        "阻塞时说明缺项。提交、推送、发布、安装及其他副作用遵循本次授权。"
+        if args.workspace_write else
+        "仅在授权范围内只读核对，不写文件、不产生外部副作用。报告证据及不确定项。"
+    )
     prompt = "\n\n".join(part for part in [
-        skills, f"专家角色：{args.role.strip()}",
-        "仅在授权范围内只读核对，不写文件、不产生外部副作用。报告证据及不确定项。",
+        skills, f"专家角色：{role}", boundary,
         "默认以简体中文回复，自动生成会话标题时用简短中文概括。保留文件和工具的原名。任务指定其他语言时以任务为准。",
         task,
     ] if part)
     mode, model, effort = ROUTES[args.task_kind]
-    env = {**os.environ, "ELECTRON_RUN_AS_NODE": "1", "DSH_PERMISSION_MODE": "read-only"}
+    env = {**os.environ, "ELECTRON_RUN_AS_NODE": "1", "DSH_PERMISSION_MODE": permission}
     with tempfile.TemporaryDirectory(prefix="dsh-worker-") as temporary:
         patch = Path(temporary) / "route.patch.yml"
         write_overlay(patch, mode, model, effort)
         command = [str(exe), "--expose-internals", str(cli), "--profile", "headless",
-                   "--patch", str(patch), "--permission-mode", "read-only", "--approval-policy", "never", "--json", "-"]
+                   "--patch", str(patch), "--permission-mode", permission, "--approval-policy", "never", "--json", "-"]
         run = subprocess.run(command, cwd=cwd, env=env, input=prompt.encode("utf-8"),
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=args.timeout)
     result = summarize(run.stdout.decode("utf-8-sig", errors="replace"), run.returncode)
     result["route"] = {"task_kind": args.task_kind, "mode": mode, "provider": PROVIDER, "model": model,
-                       "reasoning_effort": effort, "permission": "read-only"}
+                       "reasoning_effort": effort, "permission": permission}
+    if args.workspace_write:
+        result["workspace"] = str(cwd)
     print(json.dumps(result, ensure_ascii=True))
 
 
