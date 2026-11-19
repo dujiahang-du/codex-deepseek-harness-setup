@@ -1,6 +1,6 @@
 # Codex + DeepSeek Harness
 
-Give Codex a task in plain language. It can handle a quick check, delegate a focused review, or coordinate several DeepSeek Harness experts. When you authorize a development change, Harness can implement it directly in the current Codex project. Codex sets the scope and verifies the result.
+Give Codex a task in plain language. It can handle a quick check, delegate a focused review, or coordinate several DeepSeek Harness experts. When you ask for an implementation, fix, or saved deliverable, Codex can delegate the work to Harness in the current project. Codex sets the scope and verifies the result.
 
 Use it for scoped development work, release checks, document comparisons, and batch file reviews. The setup uses Windows x64, defaults to read-only delegation, and has been tested with **DeepSeek Harness 0.2.2-rc.5**.
 
@@ -19,13 +19,13 @@ python .\install.py --harness-exe "<absolute path to DeepSeek Harness.exe>" --no
 python .\install.py --harness-exe "<absolute path to DeepSeek Harness.exe>" --node-exe "<absolute path to node.exe>" --apply
 ```
 
-4. Start a new Codex chat in the project you want to work on. Ask for a read-only review or explicitly authorize a [project change](#authorized-project-changes). The [synthetic smoke tests](#verify-with-synthetic-data) cover both routes.
+4. Start a new Codex chat in the project you want to work on. Ask for a read-only review or request a [project change](#authorized-project-changes). The [synthetic smoke tests](#verify-with-synthetic-data) cover both routes.
 
 Setup fetches the pinned bridge and its locked dependencies when needed. It uses `~/.codex` or your existing `CODEX_HOME`, backs up the Worker and policy when upgrading known versions, and preserves conflicting custom files. The isolated launcher and its local state live under `integrations/dsh-orchestrator` in that root. The launcher uses your installed Harness and its local sign-in.
 
 | Installed component | What it does |
 |---|---|
-| [Worker Skill](skills/deepseek-harness-worker/SKILL.md) | Runs a one-off Headless task with read-only access or explicitly authorized workspace edits |
+| [Worker Skill](skills/deepseek-harness-worker/SKILL.md) | Runs a one-off Headless task with read-only access or scoped workspace edits inferred from the request |
 | [Orchestrator](launch.py) | Gives Codex a local MCP connection for delegation, progress, traces, and follow-ups |
 | [Delegation policy](codex-delegation-policy.md) | Adds task routing, handoff rules, and verification criteria to Codex's user instructions |
 
@@ -50,9 +50,9 @@ Codex handles small checks directly and uses the Worker Skill for one-off delega
 
 ### Authorized project changes
 
-For a development task with write authorization, Codex checks the project rules, existing changes, and allowed files. It passes the current project's absolute directory to the Headless Worker with `--cwd` and enables Harness's native `workspace-write` for that run. The expert completes the assignment and reports changed files, checks, and any blockers together. Codex checks the files on disk, reviews the diff, and runs the relevant project checks before accepting the result.
+An ordinary request to implement a feature, fix a bug, or save a deliverable authorizes the edits needed to complete it within the current project. Codex decides whether to delegate and checks the project rules, existing changes, and allowed files. A separate write confirmation is only needed when the requested scope leaves a material authorization question. It passes the current project's absolute directory to the Headless Worker with `--cwd` and enables Harness's native `workspace-write` for that run. The expert completes the assignment and reports changed files, checks, and any blockers together. After the Worker finishes, Codex checks the files on disk, reviews the diff, and runs the relevant project checks before accepting the result.
 
-Read-only is the default for other tasks. Orchestrator runs read-only and can review the completed work. Installs, commits, and publication each follow the task's authorization.
+Requests to inspect, review, analyze, or propose changes use read-only access by default. A user-specified read-only limit takes precedence. Orchestrator runs read-only and can review the completed work. Installs, commits, and publication each follow the task's authorization.
 
 ### Expert handoffs and corrections
 
@@ -109,7 +109,7 @@ The expected result is **6 ready items totaling 96**. Verify that Codex initiate
 
 Create a temporary project with a `requirements.txt` that asks for a Python function `total(count)`. The first three tickets cost 12 cents each, further tickets cost 8 cents each, and negative counts raise `ValueError`. Add an `original.txt` file to check that existing files are preserved. Open that project in a new Codex chat and send this request.
 
-> Implement the function in requirements.txt. You may create tickets.py in this project. Preserve the existing files. Verify the result and report the path you actually changed.
+> Use requirements.txt to implement the ticket pricing function in tickets.py. Preserve the existing files. Verify the result and report the path you actually changed.
 
 Check that the Headless Worker used `workspace-write`, Harness created `tickets.py` in that project, and Codex verified the output. In the synthetic test, the only new file was `tickets.py` and all six cases passed. Counts 0, 1, 3, 4, and 9 produced 0, 12, 36, 44, and 84 cents. A negative count raised `ValueError`.
 

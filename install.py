@@ -20,6 +20,7 @@ TOOLS = ["dsh_delegate", "dsh_status", "dsh_wait", "dsh_tail", "dsh_followup", "
 POLICY_START = "<!-- BEGIN local dsh-orchestrator delegation -->"
 POLICY_END = "<!-- END local dsh-orchestrator delegation -->"
 UPGRADABLE_POLICIES = {
+    "281a075880aca9336a2d8599142989e287b88875fb6f22cdde837b40ee2c5907",
     "3ebbf4fe46e9dbc27a66e9ee578d11d739cf38ae0aca0d5ac870907e0e713213",
     "1589010322b0a70402bb5a8209301a40d2250ead73dae486502cc695a08dec8b",
     "b5725115daf03c8680b9ef240c87696752ff3ad06801012e04fe6d7cc4089b07",
@@ -138,9 +139,9 @@ def replace_instruction(path, old, updated):
 
 
 PREVIOUS_WORKER_FILE_HASHES = {
-    Path("SKILL.md"): "5a83332458469e3c28a77813484f350d31c84c403140151b0f12792a29af5df4",
-    Path("agents/openai.yaml"): "82459be0225d90a6716537aad3776e4289159b3b4f211ef67d4041b60dd0865c",
-    Path("scripts/run_worker.py"): "ec5a16282a9882366bf73cacd9ca934c5cc2b84344dd92cfc7ee1123ce75c0ef",
+    Path("SKILL.md"): {"5a83332458469e3c28a77813484f350d31c84c403140151b0f12792a29af5df4", "783bc2b9a3ecd607258e4aae46fcc93ad933b3401d88473ea7715ec703297d9b"},
+    Path("agents/openai.yaml"): {"82459be0225d90a6716537aad3776e4289159b3b4f211ef67d4041b60dd0865c"},
+    Path("scripts/run_worker.py"): {"ec5a16282a9882366bf73cacd9ca934c5cc2b84344dd92cfc7ee1123ce75c0ef"},
 }
 
 
@@ -165,7 +166,7 @@ def worker_plan(source, codex, exe):
     current = worker_files(target) if target.is_dir() else None
     if target.exists() and current != expected:
         if current is None or current.keys() != expected.keys() or any(
-            sha256(data.replace(b"\r\n", b"\n")).hexdigest() != PREVIOUS_WORKER_FILE_HASHES.get(relative)
+            sha256(data.replace(b"\r\n", b"\n")).hexdigest() not in PREVIOUS_WORKER_FILE_HASHES.get(relative, ())
             for relative, data in current.items()
             if data.replace(b"\r\n", b"\n") != expected[relative].replace(b"\r\n", b"\n")
         ):
