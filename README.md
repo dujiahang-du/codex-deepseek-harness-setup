@@ -1,66 +1,73 @@
-# Codex × DeepSeek Harness
+# Codex + DeepSeek Harness
 
-A Windows setup for Codex-managed, read-only delegation to DeepSeek Harness. Codex chooses the execution mode, model, and reasoning level according to the task, then checks the evidence and result. Typical uses include checking rules, batch-reading files, and reviewing documents.
+Give Codex a task in plain language. It decides whether to handle it directly, delegate a focused review to DeepSeek Harness, or coordinate several experts. Codex checks their evidence and can send a correction back to the original expert before passing the work on.
 
-| Component | Purpose |
-|---|---|
-| [Worker Skill](skills/deepseek-harness-worker/SKILL.md) | Runs a one-off Headless task and returns a structured result |
-| [Orchestrator](launch.py) | Provides a local MCP endpoint for delegation, progress, traces, and follow-up tasks |
-| [Delegation policy](codex-delegation-policy.md) | Defines routing, data handoff, and acceptance criteria |
-| [Desktop privacy overlay](privacy/desktop.patch.yml) | Optionally disables additional session logs, telemetry, cloud translation of reasoning, and reverse delegation to Codex |
+Try it for release checks, document comparisons, and batch file reviews. The setup uses Windows x64, defaults to read-only delegation, and has been tested with **DeepSeek Harness 0.2.2-rc.5**.
 
-## Before you install
+> Audit this release packet against the approved rules. Verify the totals and cite the source rows. Choose any specialist reviews you need, keep the inputs read-only, and show me the final decision and its evidence.
 
-- Use Windows x64 with Python 3.12 or later, Node.js 22 or later with npm.cmd in the same folder, and Git.
-- Install and sign in to Codex and [DeepSeek Harness](https://www.deepseek.com/harness/). This setup has been validated with **Harness 0.2.2-rc.5**. Open Harness once to initialize the Desktop profile, sign in, and exit it from the system tray.
-- Clone or extract this repository and open PowerShell at its root. Setup fetches the pinned bridge revision and locked dependencies when needed.
+In a synthetic run of that workflow, Codex audited the packet locally and assigned one Harness expert to review the same nine files independently. Both found that an approved correction brought one region from 85 to 79 units, one below its release gate. Codex verified the evidence and blocked the release.
 
-## Install
+## Quick start
 
-Replace the paths in angle brackets with your own executable paths. Preview the changes first, then apply them.
+1. Install and sign in to Codex and [DeepSeek Harness](https://www.deepseek.com/harness/). Open Harness Desktop once to initialize its profile, then exit it from the system tray.
+2. Install Python 3.12 or later, Node.js 22 or later with `npm.cmd` next to `node.exe`, and Git.
+3. Clone or extract this repository and open PowerShell at its root. Replace the placeholders with the full executable paths. Preview the changes with the first command, then run the second to install.
 
 ```powershell
 python .\install.py --harness-exe "<absolute path to DeepSeek Harness.exe>" --node-exe "<absolute path to node.exe>"
 python .\install.py --harness-exe "<absolute path to DeepSeek Harness.exe>" --node-exe "<absolute path to node.exe>" --apply
 ```
 
-| Option | Behavior |
+4. Start a new Codex chat and describe a read-only task, or run the [synthetic smoke test](#verify-with-synthetic-data) below. Ask for progress and a native trace to exercise the Orchestrator route.
+
+Setup fetches the pinned bridge and its locked dependencies when needed. It uses `~/.codex` or your existing `CODEX_HOME`, reports conflicting custom files, and preserves them. The isolated launcher and its local state live under `integrations/dsh-orchestrator` in that root. The launcher uses your installed Harness and its local sign-in.
+
+| Installed component | What it does |
 |---|---|
-| `--desktop-privacy` | Applies the Desktop overlay while the app is closed. An existing patch is backed up locally. |
-| `--context-insights` | Installs the optional `dsh-context 0.86.0` plugin in the isolated Web profile. It requests public metadata and queries the configured provider for account balance. |
-| `--share-harness-skills` | Links your existing Harness Skill directory into the isolated Web profile. Review that directory before sharing it with tasks. |
+| [Worker Skill](skills/deepseek-harness-worker/SKILL.md) | Runs a one-off Headless task and returns a structured result |
+| [Orchestrator](launch.py) | Gives Codex a local MCP connection for delegation, progress, traces, and follow-ups |
+| [Delegation policy](codex-delegation-policy.md) | Adds task routing, handoff rules, and verification criteria to Codex's user instructions |
 
-Setup installs the Worker Skill and executable locator, registers the `dsh_orchestrator` MCP, and adds a managed delegation section to Codex's user instructions. The default Codex config root is `~/.codex`. Setup also supports `CODEX_HOME`. The isolated Web launcher and local state live under `integrations/dsh-orchestrator` in that root. The launcher uses your installed Harness and its local sign-in. Conflicting custom files are preserved and reported.
+### Optional install flags
 
-## Delegate tasks
+| Flag | Behavior |
+|---|---|
+| `--context-insights` | Adds `dsh-context 0.86.0` to the isolated Web profile for browsing sessions and traces. The plugin requests public metadata and queries the configured provider for account balance. |
+| `--share-harness-skills` | Links your existing Harness Skill directory into the isolated Web profile. Review the skills before exposing them to delegated tasks. |
+| `--desktop-privacy` | Applies the [Desktop privacy overlay](privacy/desktop.patch.yml) while the app is closed and backs up an existing patch. The overlay disables additional session uploads, telemetry, cloud translation of reasoning, and reverse delegation to Codex. |
 
-Start a new Codex chat and describe the task normally. Codex favors the Worker Skill for one-off tasks. For real-time progress, native traces, or follow-ups, it uses Orchestrator. The supplied policy defaults to Simplified Chinese for titles, handoffs, and results. Specify a different language in the task when needed.
+## How Codex delegates
+
+Codex handles small checks directly and uses the Worker Skill for one-off delegation. It uses Orchestrator when a task needs progress updates, a native trace, or follow-ups. The supplied policy defaults to Simplified Chinese for titles, handoffs, and results. Ask for a different language in your task when needed.
 
 | Task | Harness mode | Model and reasoning |
 |---|---|---|
 | Look up values or extract specific fields | Standard | Flash / Low |
 | Compare documents or summarize logs | Standard | Flash / High |
-| Read or summarize independent items in parallel | PTC | Flash / High |
-| Resolve conflicting evidence or evaluate multiple interacting constraints | Standard | Pro / High |
+| Read, filter, or summarize a batch of independent inputs | PTC | Flash / High |
+| Resolve conflicting evidence or evaluate interacting constraints | Standard | Pro / High |
 
-Run `codex mcp get dsh_orchestrator` in PowerShell to inspect the Codex registration. During a task, Codex can use `dsh_status`, `dsh_wait`, and `dsh_tail` to observe progress and events.
+### Expert handoffs and corrections
 
-To open the Harness Web interface, run the following command and keep the launcher window open. If Context Insights is installed, find the session by title under **Context Insights → All Sessions**, then select **Trace**.
+Codex chooses the number of experts and their roles. Independent read-only stages can run in parallel. A stage that depends on another expert's findings starts after Codex has checked the supporting evidence.
+
+In a separate synthetic test, the first expert counted 52 eligible units. The reviewer held the result because the release threshold still needed a source citation. Codex sent a follow-up to the first expert's original session, obtained the approved threshold of 50, and had the reviewer clear the correction before dispatching the independent final check. The final verdict passed by two units.
+
+Orchestrator's `dsh_followup` keeps a correction in the original task. Handoffs carry the evidence and references the next expert needs. The Harness **Team Collaboration** switch controls workers within a single Harness session. The Codex-managed workflow coordinates across sessions with this switch off.
+
+## See progress and open the trace
+
+To confirm the MCP registration, run `codex mcp get dsh_orchestrator`. While a task runs, Codex can use `dsh_status`, `dsh_wait`, and `dsh_tail` to read progress and events.
+
+Orchestrator starts a Harness Web Host on `127.0.0.1` when needed. You can keep using Harness Desktop normally. Open the browser viewer when you want to inspect native traces from the bridge's separate local profile. Run the following command in PowerShell and keep the terminal open while you review.
 
 ```powershell
 $codexConfig = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
 python (Join-Path $codexConfig 'integrations/dsh-orchestrator/launch.py') --view
 ```
 
-## Let Codex choose whether to use an expert team
-
-Codex decides whether the task needs an expert team. Handle short checks directly, and delegate to one expert when a single pass is enough. Use multiple experts when the work benefits from distinct roles, evidence handoffs, or independent verification. Choose the number of experts and stages according to the task. Run independent read-only stages in parallel when useful, and check the upstream result before starting a dependent stage.
-
-The following example uses three stages to illustrate handoffs and corrections.
-
-> Supervise this read-only task in three stages. Expert 1 collects facts and cites the source. Expert 2 develops a proposal from the accepted facts. Expert 3 independently verifies the proposal against the original requirements. Check each result before handing the required evidence to the next expert. If Expert 2 or 3 finds missing evidence or a conflict, ask them to report the evidence, its impact, and the requested correction. Decide whether to send a follow-up to the original expert. Have the reporting expert check the correction before moving forward. Report unresolved blockers with the evidence still needed.
-
-Codex manages the handoff across these sessions. The Team Collaboration option in the Harness model menu controls how Harness organizes workers within its own session. Use `dsh_followup` for a correction or additional review in the original task. Keep each handoff to the required summary and evidence references. File writes and permission changes follow the authorization for the task.
+With Context Insights installed, open **Context Insights → All Sessions**, find the task by its title, and select **Trace**.
 
 ## Verify with synthetic data
 
@@ -82,7 +89,7 @@ The expected result is **6 ready items totaling 96**. Verify that Codex initiate
 
 ## Data handling
 
-Headless and isolated Web profiles disable additional session-log uploads and feedback telemetry by default. Delegated tasks use Harness's native read-only permission. Cloud inference sends the prompt and context needed for the task. Supply only the excerpts that you authorize for that task. Use a local model and offline tools when the content must stay on the machine. [Harness privacy policy](https://www.deepseek.com/harness/privacy/) · [Official session-log documentation](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-log-deepseek/README.md)
+Headless and isolated Web profiles disable additional session-log uploads and feedback telemetry by default. Delegated tasks use Harness's native read-only permission. Cloud inference sends the prompt and context needed for the task. Supply excerpts you have authorized for that task. For work that must stay on the machine, use a verified local inference path and offline tools. [Harness privacy policy](https://www.deepseek.com/harness/privacy/) · [Official session-log documentation](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-log-deepseek/README.md)
 
 Desktop plugins, desktop MCP servers, external programs, accounts, and chat histories are configured on each machine. After changing versions, use synthetic data to recheck permissions, routing, and privacy behavior.
 
