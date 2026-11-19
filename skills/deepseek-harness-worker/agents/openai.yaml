@@ -1,0 +1,4 @@
+interface:
+  display_name: "DeepSeek Harness 执行"
+  short_description: "由 Codex 分派并独立验收 DeepSeek Harness 的只读专家任务"
+  default_prompt: "用 $deepseek-harness-worker 将只读分析交给 DeepSeek Harness，并核对返回结论。"
