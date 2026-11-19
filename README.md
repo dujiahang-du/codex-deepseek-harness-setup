@@ -52,9 +52,11 @@ $codexConfig = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:US
 python (Join-Path $codexConfig 'integrations/dsh-orchestrator/launch.py') --view
 ```
 
-## Run a three-stage expert team
+## Let Codex choose whether to use an expert team
 
-Codex can supervise separate Harness sessions, assign expert roles and installed Skills as needed, and define each stage's read-only scope and acceptance criteria.
+Codex decides whether the task needs an expert team. Handle short checks directly, and delegate to one expert when a single pass is enough. Use multiple experts when the work benefits from distinct roles, evidence handoffs, or independent verification. Choose the number of experts and stages according to the task. Run independent read-only stages in parallel when useful, and check the upstream result before starting a dependent stage.
+
+The following example uses three stages to illustrate handoffs and corrections.
 
 > Supervise this read-only task in three stages. Expert 1 collects facts and cites the source. Expert 2 develops a proposal from the accepted facts. Expert 3 independently verifies the proposal against the original requirements. Check each result before handing the required evidence to the next expert. If Expert 2 or 3 finds missing evidence or a conflict, ask them to report the evidence, its impact, and the requested correction. Decide whether to send a follow-up to the original expert. Have the reporting expert check the correction before moving forward. Report unresolved blockers with the evidence still needed.
 

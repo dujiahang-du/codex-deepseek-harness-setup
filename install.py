@@ -1,6 +1,7 @@
 """Install the pinned Codex–Harness Orchestrator in a dedicated Windows profile."""
 import argparse
 from datetime import datetime, timezone
+from hashlib import sha256
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,7 @@ SERVER = "dsh_orchestrator"
 TOOLS = ["dsh_delegate", "dsh_status", "dsh_wait", "dsh_tail", "dsh_followup", "dsh_release_workspace"]
 POLICY_START = "<!-- BEGIN local dsh-orchestrator delegation -->"
 POLICY_END = "<!-- END local dsh-orchestrator delegation -->"
+UPGRADABLE_POLICY = "1589010322b0a70402bb5a8209301a40d2250ead73dae486502cc695a08dec8b"
 WORKER_SOURCE = HERE / "skills/deepseek-harness-worker"
 INSIGHTS = "dsh-context"
 INSIGHTS_VERSION = "0.86.0"
@@ -99,11 +101,13 @@ def instruction_update(old, policy):
         return (text + newline * 2 + POLICY_START + block + POLICY_END + newline).encode("utf8")
     if counts != (1, 1) or text.index(POLICY_START) > text.index(POLICY_END):
         raise ValueError("The Codex delegation policy markers are ambiguous; they were kept.")
-    _, body = text.split(POLICY_START, 1)
-    current, _ = body.split(POLICY_END, 1)
+    before, body = text.split(POLICY_START, 1)
+    current, after = body.split(POLICY_END, 1)
     normalized = current.replace("\r\n", "\n").strip()
     if normalized == policy:
         return old
+    if sha256(normalized.encode("utf8")).hexdigest() == UPGRADABLE_POLICY:
+        return (before + POLICY_START + block + POLICY_END + after).encode("utf8")
     raise ValueError("The existing Codex delegation policy differs from this package. It was kept.")
 
 
