@@ -14,7 +14,7 @@ In a synthetic run of that workflow, Codex audited the packet locally and assign
 
 ## Architecture
 
-![Codex supervises and verifies three execution routes. Completed Headless and Orchestrator sessions appear in Desktop Context Insights, with follow-ups in the same trace.](docs/architecture.en.png)
+![Codex chooses the execution route, sets the handoff language, and verifies requested changes in the current project. Completed Headless and Orchestrator sessions appear in Desktop Context Insights, with follow-ups in the same trace.](docs/architecture.en.png)
 
 ## Quick start
 
@@ -41,13 +41,16 @@ Setup fetches the pinned bridge, its locked dependencies, and Desktop Context In
 
 | Flag | Behavior |
 |---|---|
+| `--language` | `auto` follows the conversation. Choose `zh-CN` for Simplified Chinese or `en` for English. |
 | `--context-insights` | Also installs Context Insights in the optional isolated Web viewer. |
 | `--share-harness-skills` | Links your existing Harness Skill directory into the isolated Web profile. Review the skills before exposing them to delegated tasks. |
 | `--desktop-privacy` | Applies the [Desktop privacy overlay](privacy/desktop.patch.yml) while the app is closed and backs up an existing patch. The overlay disables additional session uploads, telemetry, cloud translation of reasoning, and reverse delegation to Codex. |
 
+Configure desktop app MCP connections on the machine where those apps are installed.
+
 ## How Codex delegates
 
-Codex handles small checks directly and uses the Worker Skill for one-off delegation. It uses Orchestrator for read-only work that needs live progress or coordinated follow-ups. The supplied policy defaults to Simplified Chinese for titles, handoffs, and results. Ask for a different language in your task when needed.
+Codex handles small checks directly and uses the Worker Skill for one-off delegation. It uses Orchestrator for read-only work that needs live progress or coordinated follow-ups. The selected language applies to titles, prompts sent to Harness child agents, and reports. Run the installer with `--language auto`, `--language zh-CN`, or `--language en` and `--apply` to change it. An explicit request in a task takes precedence. Tools, code, and quoted errors keep their original spelling.
 
 | Task | Harness mode | Model and reasoning |
 |---|---|---|
@@ -55,6 +58,11 @@ Codex handles small checks directly and uses the Worker Skill for one-off delega
 | Compare documents or summarize logs | Standard | Flash / High |
 | Read, filter, or summarize a batch of independent inputs | PTC | Flash / High |
 | Resolve conflicting evidence or evaluate interacting constraints | Standard | Pro / High |
+| Check supplied material or retain a read-only PowerShell session | Minimal | Flash / Low |
+| Inspect an authorized image | Minimal | Flash Vision / Low |
+| Plan or review a Harness plugin, mode, tool, or UI extension | Creator | Flash / High |
+
+Minimal and Creator use Orchestrator. On Windows x64 Harness 0.2.2-rc.5, the installer enables account Flash image routing and the native read-only persistent terminal with system Windows PowerShell 5.1. Creator can load the built-in `dsh-doc` for scope checks and drafts. Authorized project files are delivered through the Headless write route below.
 
 ### Authorized project changes
 

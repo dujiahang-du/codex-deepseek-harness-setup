@@ -46,11 +46,14 @@ def write_overlay(path, mode, model, effort):
     path.write_text(account + selection, encoding="utf-8")
 
 
-def runtime(cli_hint):
-    locator = Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex")) / "deepseek-harness-worker.json"
-    value = cli_hint or os.environ.get("DSH_HARNESS_EXE")
-    if not value and locator.is_file():
-        value = json.loads(locator.read_text(encoding="utf-8-sig"))["harness_exe"]
+def worker_config():
+    codex = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+    locator = codex / "deepseek-harness-worker.json"
+    return json.loads(locator.read_text(encoding="utf-8-sig")) if locator.is_file() else {}
+
+
+def runtime(cli_hint, config):
+    value = cli_hint or os.environ.get("DSH_HARNESS_EXE") or config.get("harness_exe")
     if not value:
         found = shutil.which("dsh.cmd")
         value = str(Path(found).resolve().parents[4] / "DeepSeek Harness.exe") if found else None
@@ -138,11 +141,19 @@ def main():
             raise ValueError("Use the English kebab-case ID for each Harness Skill.")
     task = (args.task if args.task is not None else sys.stdin.buffer.read().decode("utf-8-sig")).strip()
     permission = "workspace-write" if args.workspace_write else "read-only"
-    default_role = "开发实现执行员" if args.workspace_write else "只读技术核对员"
+    config = worker_config()
+    language = config.get("language", "auto")
+    if language not in ("auto", "zh-CN", "en"):
+        raise ValueError("Use auto, zh-CN, or en for the Harness handoff language.")
+    chinese = language == "zh-CN"
+    if chinese:
+        default_role = "开发实现执行员" if args.workspace_write else "只读资料核对员"
+    else:
+        default_role = "Implementation specialist" if args.workspace_write else "Read-only reviewer"
     role = (args.role if args.role is not None else default_role).strip()
     if not task or not role:
         raise ValueError("Supply a bounded nonempty task and expert role.")
-    exe, cli = runtime(args.harness_exe)
+    exe, cli = runtime(args.harness_exe, config)
     skills = " ".join(f"/{skill_id}" for skill_id in dict.fromkeys(args.skill))
     boundary = (
         "仅在当前工作区和任务明确列出的可写范围内实现，保留既有用户修改。"
@@ -151,10 +162,21 @@ def main():
         if args.workspace_write else
         "仅在授权范围内只读核对，不写文件、不产生外部副作用。报告证据及不确定项。"
     )
+    if not chinese:
+        boundary = (
+            "Implement only within the writable scope listed in the current workspace task. Preserve user edits. "
+            "Report files, checks and open issues. Treat publishing, commits, installation and external calls as separate authorizations."
+            if args.workspace_write else
+            "Use only the authorized read-only scope. Report evidence and uncertainties. External calls require separate authorization."
+        )
+    language_rule = {
+        "auto": "Follow the language of the user's task below, ignoring wrapper labels when choosing the language. "
+                "Use it for session titles, actual child-agent prompts, and results.",
+        "zh-CN": "默认使用简体中文写标题、实际发送给子专家的提示词和回传。用户对语言有明确要求时遵照要求。保留文件名、代码和工具名原文。",
+        "en": "Use English for titles, child-agent prompts, and results unless the task explicitly requests another language. Keep filenames, code, and tool names as written.",
+    }[language]
     prompt = "\n\n".join(part for part in [
-        skills, f"专家角色：{role}", boundary,
-        "默认以简体中文回复，自动生成会话标题时用简短中文概括。保留文件和工具的原名。任务指定其他语言时以任务为准。",
-        task,
+        skills, f"专家角色：{role}" if chinese else f"Expert role: {role}", boundary, language_rule, task,
     ] if part)
     mode, model, effort = ROUTES[args.task_kind]
     env = {**os.environ, "ELECTRON_RUN_AS_NODE": "1", "DSH_PERMISSION_MODE": permission}

@@ -14,7 +14,7 @@ Headless 和 Orchestrator 任务结束后，会自动出现在 **Harness 桌面�
 
 ## 架构图
 
-![Codex 主控三条执行路线并统一验收。Headless 和 Orchestrator 完成后自动收录到桌面上下文洞察，续聊工具记录显示在原会话轨迹。](docs/architecture.zh-CN.png)
+![Codex 选择执行路线和交接语言，并验收在当前项目实际产出的文件。Headless 和 Orchestrator 完成后自动收录到桌面上下文洞察，续聊工具记录显示在原会话轨迹。](docs/architecture.zh-CN.png)
 
 ## 快速开始
 
@@ -41,13 +41,16 @@ python .\install.py --harness-exe "<absolute path to DeepSeek Harness.exe>" --no
 
 | 参数 | 用途 |
 |---|---|
+| `--language` | `auto` 跟随对话。`zh-CN` 选简体中文，`en` 选英文。 |
 | `--context-insights` | 额外为可选的独立 Web 查看器安装上下文洞察 |
 | `--share-harness-skills` | 将你自己的 Harness Skill 目录链接到独立 Web 配置。使用前先检查将被委派任务访问的 Skill |
 | `--desktop-privacy` | 在桌面版已退出时应用[桌面隐私配置](privacy/desktop.patch.yml)，并备份现有覆盖文件。配置会停用额外会话日志上传、遥测、思考过程云端翻译，以及 Harness 反向派活给 Codex |
 
+桌面应用的 MCP 连接需在目标电脑适配。
+
 ## Codex 如何分派任务
 
-Codex 直接处理简短检查，一次性的委派使用 Worker Skill。需要实时进度或协调多轮续派的只读任务，使用 Orchestrator。默认用简体中文写会话标题、交接内容和结果。可在任务里指定其他语言。
+Codex 直接处理简短检查，一次性的委派使用 Worker Skill。需要实时进度或协调多轮续派的只读任务，使用 Orchestrator。所选语言覆盖会话标题、实际发给 Harness 子专家的提示词和汇报。安装时用 `--language zh-CN` 选简体中文，或用 `--language en` 选英文。默认 `--language auto` 跟随对话。可带所选参数和 `--apply` 重新运行安装脚本切换。任务明确指定的语言优先，工具名、代码和引用的错误原文保留。
 
 | 任务 | Harness 模式 | 模型与推理等级 |
 |---|---|---|
@@ -55,6 +58,11 @@ Codex 直接处理简短检查，一次性的委派使用 Worker Skill。需要�
 | 比对文档或归纳日志 | 标准 | Flash / High |
 | 批量读取、筛选或汇总独立输入 | PTC | Flash / High |
 | 裁决证据冲突或评估多个相互影响的约束 | 标准 | Pro / High |
+| 核对已给材料或延续只读 PowerShell 状态 | 极简 | Flash / Low |
+| 核对已授权的图片 | 极简 | Flash 视觉 / Low |
+| 设计或审查 Harness 插件、模式、工具或界面扩展 | 创造 | Flash / High |
+
+极简和创造走 Orchestrator。Windows x64 Harness 0.2.2-rc.5 的安装器会接入账号版 Flash 视觉，并通过系统 Windows PowerShell 5.1 启动原生只读持久终端。创造模式可加载内置 `dsh-doc` 核对方案和草案。授权后的项目文件由下方 Headless 写入路线产出。
 
 ### 项目内修改
 

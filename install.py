@@ -11,6 +11,8 @@ import sys
 import tempfile
 import tomllib
 
+from mode_support import VISION_FILE, prepare_shell, shell_overlay, vision_route
+
 
 SOURCE = "https://github.com/Fly2Kiana/Codex-DSH-Orchestrator.git"
 REVISION = "428c69f590d569b0c7cfbdb831bfa88beedc938b"
@@ -20,6 +22,11 @@ TOOLS = ["dsh_delegate", "dsh_status", "dsh_wait", "dsh_tail", "dsh_followup", "
 POLICY_START = "<!-- BEGIN local dsh-orchestrator delegation -->"
 POLICY_END = "<!-- END local dsh-orchestrator delegation -->"
 UPGRADABLE_POLICIES = {
+    "e5b94571a40bdc0d2678f718526444d57091c9264df106d96e0a892e2896ff62",
+    "ff10395e996788ab965f9a5bfd4b3d1791dad7ed3908f5eb25e2a616411a513d",
+    "fc1f8e3f63ef7934ed538af7bec403443d648d19cc5cac5439beec01da74c9d6",
+
+    '21e906c1bcc4a7f137684d7b3b1668b006c2e24c9accfbd62487aacf80acc578',
     "fdaf935ed774d1431738ed720645bdb0f2bfb94d2d9815e2f6ac91899b07e9f1",
     "281a075880aca9336a2d8599142989e287b88875fb6f22cdde837b40ee2c5907",
     "3ebbf4fe46e9dbc27a66e9ee578d11d739cf38ae0aca0d5ac870907e0e713213",
@@ -33,6 +40,14 @@ INSIGHTS_ARCHIVE = f"{INSIGHTS}-{INSIGHTS_VERSION}.tgz"
 INSIGHTS_ARCHIVE_HASH = "8792e42b833fc8086ff5605bf11041fdc6d9af1baa753a69781fa42f0d3fee73"
 WEB_BUNDLES = ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app"]
 TRACE_MODULE = "desktop-trace-catalog.mjs"
+LANGUAGE_MODULE = "handoff-language.mjs"
+LANGUAGE_START = "# BEGIN Codex handoff language"
+LANGUAGE_END = "# END Codex handoff language"
+LANGUAGES = {
+    "auto": "Use the user's conversation language",
+    "zh-CN": "Default to Simplified Chinese",
+    "en": "Default to English",
+}
 TRACE_START = "# BEGIN Codex completed session refresh"
 TRACE_END = "# END Codex completed session refresh"
 PREVIOUS_LAUNCH_HASH = "6d2ce0f055458693e997e59805ea0d68b1e3543bc81895528b3f2fa3cd663e59"
@@ -104,7 +119,7 @@ def append(path, text, old):
         f.write(text.encode("utf8"))
 
 
-def instruction_update(old, policy):
+def instruction_update(old, policy, known_variants=()):
     text = old.decode("utf-8")
     newline = "\r\n" if "\r\n" in text else "\n"
     block = newline + policy.replace("\n", newline) + newline
@@ -118,7 +133,7 @@ def instruction_update(old, policy):
     normalized = current.replace("\r\n", "\n").strip()
     if normalized == policy:
         return old
-    if sha256(normalized.encode("utf8")).hexdigest() in UPGRADABLE_POLICIES:
+    if normalized in known_variants or sha256(normalized.encode("utf8")).hexdigest() in UPGRADABLE_POLICIES:
         return (before + POLICY_START + block + POLICY_END + after).encode("utf8")
     raise ValueError("The existing Codex delegation policy differs from this package. It was kept.")
 
@@ -146,9 +161,9 @@ def replace_instruction(path, old, updated):
 
 
 PREVIOUS_WORKER_FILE_HASHES = {
-    Path("SKILL.md"): {"5a83332458469e3c28a77813484f350d31c84c403140151b0f12792a29af5df4", "783bc2b9a3ecd607258e4aae46fcc93ad933b3401d88473ea7715ec703297d9b", "0306434a78b4e3159e98cfdfebf2898e9da936ea1712b0b435adaa3ad3123815"},
+    Path("SKILL.md"): {"5a83332458469e3c28a77813484f350d31c84c403140151b0f12792a29af5df4", "783bc2b9a3ecd607258e4aae46fcc93ad933b3401d88473ea7715ec703297d9b", "0306434a78b4e3159e98cfdfebf2898e9da936ea1712b0b435adaa3ad3123815", 'e40334b17859ef7f5bfb72967fbfceb4d131e098d6ace0205266b4016f9e9f68'},
     Path("agents/openai.yaml"): {"82459be0225d90a6716537aad3776e4289159b3b4f211ef67d4041b60dd0865c"},
-    Path("scripts/run_worker.py"): {"ec5a16282a9882366bf73cacd9ca934c5cc2b84344dd92cfc7ee1123ce75c0ef", "3607caa5cdfe738804e3d75d01d35745e1f38146e3a989f465837c3740ea4491", "4b7208d6462516fb686540e07c8a68cb83d9d123ceb0f689d20ee5fb1bc6a375"},
+    Path("scripts/run_worker.py"): {"ec5a16282a9882366bf73cacd9ca934c5cc2b84344dd92cfc7ee1123ce75c0ef", "3607caa5cdfe738804e3d75d01d35745e1f38146e3a989f465837c3740ea4491", "4b7208d6462516fb686540e07c8a68cb83d9d123ceb0f689d20ee5fb1bc6a375", 'c15fedd3e055c8213c0acf2f22cdbdc688222a39270a9da2ecc2b81070d0afae'},
 }
 
 
@@ -178,17 +193,19 @@ def worker_plan(source, codex, exe):
             if data.replace(b"\r\n", b"\n") != expected[relative].replace(b"\r\n", b"\n")
         ):
             raise ValueError("The existing Codex worker Skill differs from the setup package. It was kept.")
-    if locator.exists():
-        saved_locator = json.loads(locator.read_text(encoding="utf-8-sig"))
-        if (not isinstance(saved_locator, dict) or set(saved_locator) != {"harness_exe"}
-                or not isinstance(saved_locator["harness_exe"], str)
+    saved = locator.read_bytes() if locator.exists() else None
+    saved_locator = json.loads(saved.decode("utf-8-sig")) if saved is not None else {}
+    if saved is not None:
+        if (not isinstance(saved_locator, dict) or not set(saved_locator) <= {"harness_exe", "language"}
+                or saved_locator.get("language", "auto") not in tuple(LANGUAGES)
+                or not isinstance(saved_locator.get("harness_exe"), str)
                 or Path(saved_locator["harness_exe"]).resolve() != exe):
             raise ValueError("The existing Codex worker locator differs from the selected Harness. It was kept.")
-    return target, locator, expected, current
+    return target, locator, expected, current, saved, saved_locator.get("language", "auto")
 
 
-def restore_worker(plan, exe):
-    target, locator, expected, current = plan
+def restore_worker(plan, exe, language):
+    target, locator, expected, current, saved, _ = plan
     if target.exists() != (current is not None) or (current is not None and worker_files(target) != current):
         raise ValueError("The Codex worker Skill changed during installation. It was kept.")
     if current is None:
@@ -213,8 +230,9 @@ def restore_worker(plan, exe):
             if data != current[relative]:
                 replace_instruction(target / relative, current[relative], data)
         print(f"Previous Codex Worker: {backup}")
-    if not locator.exists():
-        keep_or_create(locator, json.dumps({"harness_exe": exe.as_posix()}, ensure_ascii=False) + "\n")
+    locator_data = (json.dumps({"harness_exe": exe.as_posix(), "language": language}, ensure_ascii=False) + "\n").encode("utf8")
+    if saved != locator_data:
+        replace_instruction(locator, saved or b"", locator_data)
 
 
 def link_skills(target, source):
@@ -350,6 +368,36 @@ def trace_overlay(module, plugin_id="codex-desktop-trace-catalog"):
     return f"- insert:\n  - id: {plugin_id}\n    name: {name}\n"
 
 
+def language_overlay(module, language):
+    name = json.dumps(module.as_posix(), ensure_ascii=False)
+    return (
+        f"\n{LANGUAGE_START}\n- insert:\n    - id: codex-handoff-language\n"
+        f"      name: {name}\n      config:\n        language: {language}\n{LANGUAGE_END}\n"
+    )
+
+
+def configure_web_patch(profile, module, credentials, language, shell_module):
+    patch = profile / "cordis.patch.yml"
+    if any(path.is_symlink() or path.is_junction() for path in (profile.parent, profile, patch, module)):
+        raise ValueError("A language configuration path is redirected. It was kept.")
+    old = patch.read_bytes() if patch.exists() else b""
+    current = old.decode("utf-8-sig").replace("\r\n", "\n")
+    current = current.removesuffix(shell_overlay(shell_module))
+    for available in LANGUAGES:
+        suffix = language_overlay(module, available)
+        if current.endswith(suffix):
+            current = current.removesuffix(suffix)
+            break
+    if current not in (patch_text(credentials), patch_text(credentials, privacy=False)) and any(
+        line.strip() not in ("", "[]") and not line.lstrip().startswith("#") for line in current.splitlines()
+    ):
+        raise ValueError("The worker profile patch has other settings and was kept.")
+    keep_or_create(module, (HERE / LANGUAGE_MODULE).read_text(encoding="utf-8"))
+    configured = (patch_text(credentials) + language_overlay(module, language) + shell_overlay(shell_module)).encode("utf-8")
+    if configured != old:
+        replace_instruction(patch, old, configured)
+
+
 def trace_plan(daily, managed, settings, privacy):
     module = managed / TRACE_MODULE
     overlay = managed / "desktop-trace.patch.yml"
@@ -437,6 +485,7 @@ def main():
     p.add_argument("--context-insights", action="store_true", help="Also install Context Insights in the optional Web viewer")
     p.add_argument("--share-harness-skills", action="store_true", help="Expose your existing Harness Skills to the isolated host")
     p.add_argument("--desktop-privacy", action="store_true", help="Also apply the privacy overlay to the signed-in Desktop profile")
+    p.add_argument("--language", choices=LANGUAGES, help="Language for expert prompts, handoffs, and results (default: auto on a fresh install)")
     p.add_argument("--apply", action="store_true")
     args = p.parse_args()
     if os.name != "nt":
@@ -457,6 +506,7 @@ def main():
     if args.share_harness_skills and not skills_source.is_dir():
         raise ValueError("The requested Desktop Skill folder does not exist.")
     worker = worker_plan(WORKER_SOURCE, codex, exe)
+    language = args.language or worker[-1]
     managed = codex / "integrations/dsh-orchestrator"
     agents = managed / "agents-home"
     dsh_home = managed / "harness-home"
@@ -474,8 +524,10 @@ def main():
                 "startup_timeout_sec": 70, "tool_timeout_sec": 75, "enabled_tools": TOOLS}
     if existing is not None and existing != expected:
         raise ValueError("The existing dsh_orchestrator MCP configuration differs; it was kept.")
-    policy = (HERE / "codex-delegation-policy.md").read_text(encoding="utf8").strip()
-    updated_instruction = instruction_update(old_instruction, policy)
+    policy_template = (HERE / "codex-delegation-policy.md").read_text(encoding="utf8").strip()
+    variants = {key: policy_template.replace("{{handoff_language}}", description)
+                for key, description in LANGUAGES.items()}
+    updated_instruction = instruction_update(old_instruction, variants[language], variants.values())
     policy_needed = updated_instruction != old_instruction
     settings = {"harness_exe": exe.as_posix(), "node_exe": node.as_posix(), "agents_home": agents.as_posix()}
     if daily.resolve() != (Path.home() / ".dsh").resolve():
@@ -485,6 +537,7 @@ def main():
     print(f"Pin {REVISION}; isolated host and visible sessions: {dsh_home}", flush=True)
     print(f"Targets: {cfg.name} (MCP), {instructions.name} (automatic delegation), {managed}", flush=True)
     print(f"Worker Skill and executable locator: {worker[0]}, {worker[1]}", flush=True)
+    print(f"Harness handoff language: {language}", flush=True)
     print(f"Desktop Context Insights {INSIGHTS_VERSION}: {'install' if install_plugin else 'reuse'}", flush=True)
     print(f"Desktop trace setup: {len(trace)} file update(s); optional Web viewer: {args.context_insights}", flush=True)
     if not args.apply:
@@ -494,24 +547,22 @@ def main():
     managed.mkdir(parents=True, exist_ok=True)
     agents.mkdir(exist_ok=True)
     install_source(managed / "upstream", args.audited_checkout, node)
+    vision = managed / "upstream" / VISION_FILE
+    original_vision = vision.read_bytes()
+    compatible_vision = vision_route(original_vision)
+    if compatible_vision != original_vision:
+        replace_instruction(vision, original_vision, compatible_vision)
+    shell_module = prepare_shell(managed, exe)
     sandbox_skills = dsh_home / "skills"
     if args.share_harness_skills:
         link_skills(sandbox_skills, skills_source)
     elif os.path.lexists(sandbox_skills):
         print("Existing managed Skill directory is present. Review its contents before delegating.")
     configure_web(profile, exe, dsh_home, args.context_insights)
-    patch = profile / "cordis.patch.yml"
-    current = patch.read_text(encoding="utf-8-sig") if patch.exists() else ""
-    configured = patch_text(credentials)
-    if current != configured:
-        if current != patch_text(credentials, privacy=False) and any(
-            line.strip() not in ("", "[]") and not line.lstrip().startswith("#") for line in current.splitlines()
-        ):
-            raise ValueError("The worker profile patch has other settings and was kept.")
-        replace_instruction(patch, patch.read_bytes() if patch.exists() else b"", configured.encode("utf8"))
+    configure_web_patch(profile, managed / LANGUAGE_MODULE, credentials, language, shell_module)
     configure_desktop_insights(desktop_profile, exe, daily, install_plugin)
     restore_trace(trace, managed)
-    restore_worker(worker, exe)
+    restore_worker(worker, exe, language)
     if existing is None or policy_needed:
         backup = managed / ("backup-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ"))
         backup.mkdir()
