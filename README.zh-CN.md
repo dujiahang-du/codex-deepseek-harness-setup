@@ -14,7 +14,7 @@ Headless 和 Orchestrator 任务结束后，会自动出现在 **Harness 桌面�
 
 ## 架构图
 
-![Codex 选择执行路线和交接语言，并验收在当前项目实际产出的文件。Headless 和 Orchestrator 完成后自动收录到桌面上下文洞察，续聊工具记录显示在原会话轨迹。](docs/architecture.zh-CN.png)
+![Codex 分别选择 Harness 模式和工作区权限。标准、PTC、极简和创造都可以通过 Orchestrator 只读或按授权写入项目。完全权限需要用户明确授权当次任务。Codex 验收结果，完成的会话及续聊可在桌面轨迹回看。](docs/architecture.zh-CN.png)
 
 ## 快速开始
 
@@ -62,15 +62,15 @@ Codex 直接处理简短检查，一次性的委派使用 Worker Skill。需要�
 | 核对已授权的图片 | 极简 | Flash 视觉 / Low |
 | 设计或审查 Harness 插件、模式、工具或界面扩展 | 创造 | Flash / High |
 
-极简和创造走 Orchestrator。Windows x64 Harness 0.2.2-rc.5 的安装器会接入账号版 Flash 视觉，并通过系统 Windows PowerShell 5.1 启动原生只读持久终端。创造模式可加载内置 `dsh-doc` 核对方案和草案。授权后的项目文件由下方 Headless 写入路线产出。
+Orchestrator 支持四种模式。Windows x64 Harness 0.2.2-rc.5 的安装器会接入账号版 Flash 视觉，并通过系统 Windows PowerShell 5.1 启动原生只读或项目内写入的持久终端。创造模式可以加载内置 `dsh-doc` 处理 Harness 扩展。
 
 ### 项目内修改
 
 要求实现功能、修复问题或保存交付物，通常已包含完成该任务所需的当前项目写入。Codex 判断是否委派，并核对项目规则、既有改动和可修改文件。只有写入范围存在实质疑问时才另外确认。
 
-委派时，Codex 用 `--cwd` 将当前项目的绝对路径传给 Headless Worker，为当次任务启用 Harness 原生 `workspace-write`。专家连续完成整项交付，再统一报告实际改动、检查结果和阻塞。Worker 结束后，Codex 检查落盘文件和差异，运行相关项目检查后验收。
+标准和 PTC 可走 Headless Worker。四种模式都可以走 Orchestrator，使用 `permissionMode: workspace-write` 和 `workspaceMode: exclusive-write` 在当前项目内写入。PTC 或极简子进程遇到 Windows 工作区 ACL 阻断时，Codex 可保持原项目授权，切换到标准模式的原生文件工具完成交付。专家统一报告实际改动、检查结果和阻塞，Codex 核对落盘文件与差异后验收。
 
-查看、审阅、分析和给方案默认只读。用户指定的只读限制优先。Orchestrator 保持只读，可以复核完成后的产出。安装、提交和发布分别按实际任务授权执行。
+查看、审阅、分析和给方案默认 `read-only`。Orchestrator 在派发首轮前核对实际生效的原生权限。用户明确授权当次任务后，四种模式均可选择完全权限 `danger-full-access`，并搭配独占工作区声明。变更权限时新建任务。安装、提交和发布分别按实际任务授权执行。
 
 ### 专家交接与补查
 
@@ -135,7 +135,7 @@ $fixture
 
 ## 数据处理
 
-Headless 和独立 Web 配置默认停用额外会话日志上报和反馈遥测。委派任务默认使用 Harness 原生只读权限。授权的 Headless 修改只在当次任务使用原生工作区写入。云模型调用会发送完成任务所需的提示与上下文，请按任务提供已授权的信息。需要数据留在本机时，使用已验证的本地推理与离线工具。 [Harness 隐私政策](https://www.deepseek.com/harness/privacy/) · [官方会话日志说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-log-deepseek/README.md)
+Headless 和独立 Web 配置默认停用额外会话日志上报和反馈遥测。委派任务默认使用 Harness 原生只读权限。云模型调用会发送完成任务所需的提示与上下文，请按任务提供已授权的信息。需要数据留在本机时，使用已验证的本地推理与离线工具。 [Harness 隐私政策](https://www.deepseek.com/harness/privacy/) · [官方会话日志说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-log-deepseek/README.md)
 
 轨迹登记及 Orchestrator 已完成会话的副本都留在同一台电脑上。上下文洞察可能请求公开元数据，并向配置的提供方查询账户余额。各台电脑使用各自的账号、聊天记录和额外工具。换版本后用合成数据复验权限、选档和隐私设置。
 

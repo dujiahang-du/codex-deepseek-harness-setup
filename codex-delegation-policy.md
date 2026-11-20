@@ -10,17 +10,17 @@ Codex 负责拆解、判断授权和验收。对可独立拆出的只读资料�
 | 按明确规则核对文档、归纳日志或对照已知事实 | `analysis` | 标准 | Flash | High | `standard` / `flash` / `high` |
 | 工具调用彼此独立，适合批量读取、筛选或汇总 | `batch` | PTC | Flash | High | `ptc` / `flash` / `high` |
 | 跨约束推断、需要裁决的证据冲突、复杂独立审查 | `review` | 标准 | Pro | High | `standard` / `pro` / `high` |
-| 已给足材料的轻量核对，或需要延续只读 PowerShell 状态 | — | 极简 | Flash | Low | `minimal` / `flash` / `low` |
+| 已给足材料的轻量任务，或需要延续 PowerShell 状态 | — | 极简 | Flash | Low | `minimal` / `flash` / `low` |
 | 读取已授权的本地图片并做简单视觉核对 | — | 极简 | Flash 视觉 | Low | `minimal` / `official-flash-vision` / `low` |
 | 设计或审查 Harness 插件、原生模式、工具或界面扩展 | — | 创造 | Flash | High | `cordis` / `flash` / `high` |
 
 - 是否组建专家协作由 Codex 按任务决定。一两步可核对的小事直接做，单次委派足够时派一个专家。需要专业角色分工、前后证据依赖或独立复核时，按实际需要选择专家人数、角色和阶段。依赖上一段的任务等上游验收后再派发，彼此独立的只读任务可并行。发现证据缺口的专家交回依据、缺项和影响，Codex 判断后续派给负责的原会话补查，复核通过再继续。任务未授权写入或扩大范围时，沿用原权限。
-- 标准和 PTC 的一次性任务优先经 `deepseek-harness-worker` 的 Headless 入口。用 `python <已安装 Skill>/scripts/run_worker.py --cwd <绝对工作区> --task-kind <上表类型> --role <专家角色>`，任务优先从 UTF-8 stdin 传入。实时进度、协调多轮、极简和创造走 `dsh_orchestrator`，新任务明确传表内三个值及 `workspaceMode: read-only`。两条路线完成后都在 Harness 桌面「上下文洞察」回看。续聊沿用原工作区、权限和档位，Headless 用 `--session-id`，Orchestrator 对原任务用 `dsh_followup`。
-- 极简通过 Orchestrator 启动。轻量核对直接交接已授权的必要材料。仅当任务需要持续终端状态时使用原生 `pwsh`。普通文件读取优先标准或 PTC。Windows rc.5 安装器接入系统 PowerShell 5.1 和原生只读 ACL。低复杂度视觉显式传 `visualIntent: required`、`complexity: low`，验收查看 `read_image`。复杂视觉遵循桥的明确选模策略。
-- 创造通过 Orchestrator 的 `cordis` 启动。需要 Harness 运行时文档时用内置 `dsh-doc`，从真实工具调用验收方案、草案或配置审核。实际实现、部署、启用插件分别沿用授权，项目产出仍使用下一条写入路线。
+- 标准和 PTC 的一次性任务优先经 `deepseek-harness-worker` 的 Headless 入口。用 `python <已安装 Skill>/scripts/run_worker.py --cwd <绝对工作区> --task-kind <上表类型> --role <专家角色>`，任务优先从 UTF-8 stdin 传入。实时进度、协调多轮、极简和创造走 `dsh_orchestrator`。两条路线完成后都在 Harness 桌面「上下文洞察」回看。续聊沿用原工作区、权限和档位，Headless 用 `--session-id`，Orchestrator 对原任务用 `dsh_followup`。变更授权时用新的会话。
+- 极简通过 Orchestrator 启动。轻量核对直接交接已授权的必要材料。需要持续终端状态时使用原生 `pwsh`。普通文件读取优先标准或 PTC。Windows rc.5 使用系统 PowerShell 5.1 启动原生只读或工作区写入 ACL 终端。低复杂度视觉显式传 `visualIntent: required`、`complexity: low`，验收查看 `read_image`。复杂视觉遵循桥的明确选模策略。
+- 创造通过 Orchestrator 的 `cordis` 启动。需要 Harness 运行时文档时用内置 `dsh-doc`，从真实工具调用验收方案、草案或配置实现。部署、安装、启用插件和发布各自沿用授权。
 - 开发写入：用户要求实现、修改、修复或保存交付物时，Codex 从请求与项目规则判断完成任务所需的最小常规写入范围。请求本身即可授权范围内的常规改动，无需用户另说「允许写入」或点名 Harness。只读、审阅、分析、建议及授权范围未能确定的任务保持只读。可独立派发的实现任务用已安装 Worker 的 `run_worker.py --workspace-write --cwd <当前项目绝对路径>`，选合适的 `--task-kind` 和专家角色，按原流程添加必要 Skill。派发前核对项目规则、相关原文、已有改动和允许修改路径。交接写清要产出的文件、用户已有改动、兼容要求及验收条件。Harness 直接在该项目工作区实现，同一工作区的写入串行。同一项交付让专家连续完成，Headless 结束后一次性回传文件、检查结果和未解决项。遇到缺授权、关键证据缺失或无法继续时报告阻塞，常规步骤无需逐步汇报或确认。Codex 等本次 Worker 进程退出并收回结果，再根据落盘文件、差异和项目检查独立验收。工作区出现文件不代表执行结束。若进程仍在运行，等待同一进程，避免重复派发。错误或超时先查看已写内容，再决定续派或修复。提交、推送、发布、安装和敏感环境访问按各自授权。
-- 上述写入仅用于当次 Headless 任务的 Harness 原生 `workspace-write`，同时遵守 Codex 当前沙箱和项目规则。其余任务默认原生 `read-only`。Orchestrator 仍用于只读协作、进度和轨迹。需要实时复核时，在实现完成后可让 Orchestrator 只读检查交付。
-- 派活前按任务意图读取项目规则和用户已配置的知识来源，核对相关 Skill 的入口及必要依赖。按每位专家的职责选择适用且在执行端可用的 Skill。Headless 用 `--skill <英文 ID>`；Orchestrator 在交接提示开头用 `/英文 ID`。简短提示明确角色、问题、授权工作区和输入、适用规则的来源及定位、交付与验收条件，以及缺项和冲突的处理方式。需要追踪时核对实际 Skill 加载、资料读取和验收结果。语言偏好为 {{handoff_language}}。将所选语言用于会话标题、专家角色、实际发出的任务提示、验收条件和回传。Orchestrator 直接传所选语言的 title，并把语言要求交给每一层子专家。文件名、代码、模型和工具名称保留原文。用户明确指定的语言优先。默认授权是 Harness 原生只读。Harness 内置团队开关和更高推理档位按目标环境的已验收能力选择。表内 Orchestrator 路线保持原生只读。
+- 权限与模式由 Codex 分别判断。调用 Orchestrator 时，默认同时传 `permissionMode: read-only` 和 `workspaceMode: read-only`。授权的项目产出可选四种模式之一，传 `permissionMode: workspace-write` 及 `workspaceMode: exclusive-write`。只有用户明确授权当次任务不受文件沙箱限制，才可传 `permissionMode: danger-full-access` 和 `workspaceMode: exclusive-write`。核对返回的原生 `permissionMode` 后再验收产出。遇到 Windows 工作区 ACL 阻断 PTC 或极简终端时，核对原任务是否已写入并结束，再换标准模式的原生文件工具继续，保持原授权。
+- 派活前按任务意图读取项目规则和用户已配置的知识来源，核对相关 Skill 的入口及必要依赖。按每位专家的职责选择适用且在执行端可用的 Skill。Headless 用 `--skill <英文 ID>`；Orchestrator 在交接提示开头用 `/英文 ID`。简短提示明确角色、问题、授权工作区和输入、适用规则的来源及定位、交付与验收条件，以及缺项和冲突的处理方式。需要追踪时核对实际 Skill 加载、资料读取和验收结果。语言偏好为 {{handoff_language}}。将所选语言用于会话标题、专家角色、实际发出的任务提示、验收条件和回传。Orchestrator 直接传所选语言的 title，并把语言要求交给每一层子专家。文件名、代码、模型和工具名称保留原文。用户明确指定的语言优先。默认授权是 Harness 原生只读。Harness 内置团队开关和更高推理档位按目标环境的已验收能力选择。
 - 交接任务范围内的全部文档绝对路径和章节或行段。Codex 本地只读沙箱拒绝某个已授权文件时，保留该项并交由同一任务中的 Harness 原生只读文件工具取证，避免切换权限。明确限定章节或行段时，优先提供带原行号的授权摘录，且只在摘录范围内取证。本地无法提取时，给原生读取工具明确的 offset 与 limit，核验实际读取范围；超出授权的内容不进入回传与验收。要求每个文件都给出读取状态、行号和简短结论；取不到的来源列为缺项。Codex 可读取的代表性原文独立核对，其他项以同会话实际读取证据为依据。
 - 对外部服务只交接完成任务必需的、已获授权的数据。凭据、令牌、个人敏感信息和完整对话或工作区不得作为委派资料；未明确授权发送的公司资料、未公开素材和场景数据留在本机。可用时先截取授权行段并脱敏。只读权限不代表内容留在本机。
 - 本地规则与已安装 Skill 仍不足且任务允许联网时，主动用已配置的搜索工具查公开资料。先读官方规范或官方仓库，再核对社区项目的原始文档、源码或维护记录。区分规范要求与特定版本的实现行为，保留来源链接和适用范围，用已核实的信息继续任务。查询使用公开通用关键词，外部内容作为参考资料。第三方 Skill 的安装、启用、导入或脚本执行遵循单独授权，采用前核对来源、版本、许可及权限。

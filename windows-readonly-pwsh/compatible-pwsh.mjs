@@ -21,19 +21,26 @@ export default class CompatibleSandboxedPowerShell extends LocalSubprocessRuntim
     const argv = spec.argv;
     const boundary = argv.indexOf("--");
     const mode = argv.indexOf("--mode");
-    const target = win32.basename(argv[boundary + 1] ?? "").toLowerCase();
-    if (process.platform !== "win32" || boundary < 0 || mode < 0 ||
-        argv[mode + 1] !== "read-only" || argv[0] !== process.execPath ||
-        resolve(argv[1] ?? ".") !== nativeRunner || !["pwsh.exe", "powershell.exe"].includes(target)) {
+    const shellPrograms = ["pwsh.exe", "powershell.exe"];
+    const direct = argv.length === 3 && argv[1] === "-NoLogo" && argv[2] === "-NoProfile" &&
+      shellPrograms.includes(win32.basename(argv[0]).toLowerCase());
+    const sandboxed = boundary >= 0 && mode >= 0 && ["read-only", "workspace-write"].includes(argv[mode + 1]) &&
+      argv[0] === process.execPath && resolve(argv[1] ?? ".") === nativeRunner &&
+      shellPrograms.includes(win32.basename(argv[boundary + 1] ?? "").toLowerCase());
+    if (process.platform !== "win32" || (!direct && !sandboxed)) {
       return super.spawnTerminal(spec);
     }
-    accessSync(consoleNode, constants.R_OK);
-    accessSync(extractedRunner, constants.R_OK);
     const shell = join(process.env.SystemRoot ?? "C:/Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
     accessSync(shell, constants.R_OK);
+    let command = [shell, ...argv.slice(1)];
+    if (sandboxed) {
+      accessSync(consoleNode, constants.R_OK);
+      accessSync(extractedRunner, constants.R_OK);
+      command = [consoleNode, extractedRunner, ...argv.slice(2, boundary + 1), shell, ...argv.slice(boundary + 2)];
+    }
     const handle = await super.spawnTerminal({
       ...spec,
-      argv: [consoleNode, extractedRunner, ...argv.slice(2, boundary + 1), shell, ...argv.slice(boundary + 2)],
+      argv: command,
       env: { ...spec.env, DSH_READONLY_PTY_WORKSPACE: spec.cwd },
     });
     const write = handle.write.bind(handle);

@@ -9,6 +9,7 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 RUNNER = Path("windows-readonly-pwsh")
+PREVIOUS_SHELL_SHA = "93e6bf9bda0c91968bd0a1904d9f07cf6b4f92c6b6220f218b9444003ffdf930"
 
 VISION_FILE = Path("dist/model-routing.js")
 VISION_BASE_SHA = "57635281be49ebc2e37773e6e455543469dc62b79cee8821197e0e029868f30c"
@@ -80,7 +81,9 @@ def prepare_shell(managed, exe):
             shutil.copyfile(source, staged / module)
             unpack_runner(exe.parent / "resources", staged)
         selected = target if target.exists() else staged
-        if (selected / module).read_bytes() != source.read_bytes():
+        old_module = (selected / module).read_bytes()
+        new_module = source.read_bytes()
+        if old_module != new_module and sha256(old_module.replace(b"\r\n", b"\n")).hexdigest() != PREVIOUS_SHELL_SHA:
             raise ValueError("The existing PowerShell adapter differs from this package. It was kept.")
         node = exe.parent / "resources/runtime/primary-runtime/dependencies/node/bin/node.exe"
         runner = selected / "node_modules/@deepseek-ai/dsh-sandbox-windows-acl/lib/runner.js"
@@ -89,6 +92,11 @@ def prepare_shell(managed, exe):
             raise ValueError("The extracted ACL runner failed its load check.")
         if selected == staged:
             staged.rename(target)
+        elif old_module != new_module:
+            staged.mkdir()
+            updated = staged / module
+            updated.write_bytes(new_module)
+            updated.replace(target / module)
     return target / module
 
 

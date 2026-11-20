@@ -12,6 +12,7 @@ import tempfile
 import tomllib
 
 from mode_support import VISION_FILE, prepare_shell, shell_overlay, vision_route
+from permission_bridge import PATCHES, permission_route
 
 
 SOURCE = "https://github.com/Fly2Kiana/Codex-DSH-Orchestrator.git"
@@ -22,6 +23,9 @@ TOOLS = ["dsh_delegate", "dsh_status", "dsh_wait", "dsh_tail", "dsh_followup", "
 POLICY_START = "<!-- BEGIN local dsh-orchestrator delegation -->"
 POLICY_END = "<!-- END local dsh-orchestrator delegation -->"
 UPGRADABLE_POLICIES = {
+    "1d18a279f0f8a67e507ec9aa594ddf9c083c1b7c69348cb0d70ae8d7ccc45969",
+    "abce98248a001cabffc0140346b3900397bbda787a98d057d858198a5fbce7e4",
+    "ea897c487e74d199d28f7a5997a15e9916276c68f311f429295ea35531de8d89",
     "e5b94571a40bdc0d2678f718526444d57091c9264df106d96e0a892e2896ff62",
     "ff10395e996788ab965f9a5bfd4b3d1791dad7ed3908f5eb25e2a616411a513d",
     "fc1f8e3f63ef7934ed538af7bec403443d648d19cc5cac5439beec01da74c9d6",
@@ -547,11 +551,21 @@ def main():
     managed.mkdir(parents=True, exist_ok=True)
     agents.mkdir(exist_ok=True)
     install_source(managed / "upstream", args.audited_checkout, node)
-    vision = managed / "upstream" / VISION_FILE
-    original_vision = vision.read_bytes()
-    compatible_vision = vision_route(original_vision)
-    if compatible_vision != original_vision:
-        replace_instruction(vision, original_vision, compatible_vision)
+    upstream = managed / "upstream"
+    adjustments = {VISION_FILE: vision_route}
+    for script in PATCHES:
+        path = Path("dist") / script
+        adjustments[path] = lambda data, source=path: permission_route(source, data)
+    patched = []
+    for path, adjust in adjustments.items():
+        target = upstream / path
+        if target.is_symlink() or target.is_junction():
+            raise ValueError(f"The bridge artifact {path.name} is redirected. It was kept.")
+        before = target.read_bytes()
+        patched.append((target, before, adjust(before)))
+    for target, before, after in patched:
+        if before != after:
+            replace_instruction(target, before, after)
     shell_module = prepare_shell(managed, exe)
     sandbox_skills = dsh_home / "skills"
     if args.share_harness_skills:

@@ -14,7 +14,7 @@ In a synthetic run of that workflow, Codex audited the packet locally and assign
 
 ## Architecture
 
-![Codex chooses the execution route, sets the handoff language, and verifies requested changes in the current project. Completed Headless and Orchestrator sessions appear in Desktop Context Insights, with follow-ups in the same trace.](docs/architecture.en.png)
+![Codex chooses Standard, PTC, Minimal, or Creator separately from workspace permissions. All four modes can inspect or edit a project through Orchestrator. Full access requires explicit task authorization. Codex verifies the result and the Desktop trace keeps each session and its follow-ups.](docs/architecture.en.png)
 
 ## Quick start
 
@@ -62,13 +62,13 @@ Codex handles small checks directly and uses the Worker Skill for one-off delega
 | Inspect an authorized image | Minimal | Flash Vision / Low |
 | Plan or review a Harness plugin, mode, tool, or UI extension | Creator | Flash / High |
 
-Minimal and Creator use Orchestrator. On Windows x64 Harness 0.2.2-rc.5, the installer enables account Flash image routing and the native read-only persistent terminal with system Windows PowerShell 5.1. Creator can load the built-in `dsh-doc` for scope checks and drafts. Authorized project files are delivered through the Headless write route below.
+All four modes are available through Orchestrator. On Windows x64 Harness 0.2.2-rc.5, the installer enables account Flash image routing and the native persistent terminal with system Windows PowerShell 5.1 under both read-only and workspace-write. Creator can load the built-in `dsh-doc` for Harness extension work.
 
 ### Authorized project changes
 
-An ordinary request to implement a feature, fix a bug, or save a deliverable authorizes the edits needed to complete it within the current project. Codex decides whether to delegate and checks the project rules, existing changes, and allowed files. A separate write confirmation is only needed when the requested scope leaves a material authorization question. It passes the current project's absolute directory to the Headless Worker with `--cwd` and enables Harness's native `workspace-write` for that run. The expert completes the assignment and reports changed files, checks, and any blockers together. After the Worker finishes, Codex checks the files on disk, reviews the diff, and runs the relevant project checks before accepting the result.
+An ordinary request to implement, fix, or save a deliverable authorizes the needed edits within the current project. Codex checks the project rules, existing changes, and allowed files. It can use the Headless Worker for Standard or PTC, or delegate any of the four modes through Orchestrator with `permissionMode: workspace-write` and `workspaceMode: exclusive-write`. If the PTC or Minimal subprocess cannot acquire the Windows workspace ACL, Codex can continue in Standard with native file tools under the same project scope. The expert reports changed files, checks, and blockers together. Codex checks the files and diff before accepting the result.
 
-Requests to inspect, review, analyze, or propose changes use read-only access by default. A user-specified read-only limit takes precedence. Orchestrator runs read-only and can review the completed work. Installs, commits, and publication each follow the task's authorization.
+Requests to inspect, review, analyze, or propose changes default to `read-only`. Orchestrator verifies the native permission before the first prompt. Full access (`danger-full-access`) is available for any mode with explicit task authorization and the exclusive workspace claim. Start a new task to change permissions. Installs, commits, and publication each follow the task's authorization.
 
 ### Expert handoffs and corrections
 
@@ -133,7 +133,7 @@ Check that the Headless Worker used `workspace-write`, Harness created `tickets.
 
 ## Data handling
 
-Headless and isolated Web profiles disable additional session-log uploads and feedback telemetry by default. Delegated tasks default to Harness's native read-only permission. Authorized Headless changes use native workspace-write for that run. Cloud inference sends the prompt and context needed for the task. Supply excerpts you have authorized for that task. For work that must stay on the machine, use a verified local inference path and offline tools. [Harness privacy policy](https://www.deepseek.com/harness/privacy/) · [Official session-log documentation](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-log-deepseek/README.md)
+Headless and isolated Web profiles disable additional session-log uploads and feedback telemetry by default. Delegated tasks default to Harness's native read-only permission. Cloud inference sends the prompt and context needed for the task. Supply excerpts you have authorized for that task. For work that must stay on the machine, use a verified local inference path and offline tools. [Harness privacy policy](https://www.deepseek.com/harness/privacy/) · [Official session-log documentation](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-log-deepseek/README.md)
 
 Trace registration and the copy of a completed Orchestrator session stay on the same machine. Context Insights can request public metadata and query the configured provider for account balance. Each machine uses its own accounts, chat history, and additional tools. After changing versions, use synthetic data to recheck permissions, routing, and privacy behavior.
 
