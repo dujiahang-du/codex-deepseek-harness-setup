@@ -14,7 +14,7 @@ Headless 和 Orchestrator 任务结束后，会自动出现在 **Harness 桌面�
 
 ## 架构图
 
-![Codex 主控选择直接执行、Harness 只读复核或项目内写入，然后统一验收](docs/architecture.zh-CN.png)
+![Codex 主控三条执行路线并统一验收。Headless 和 Orchestrator 完成后自动收录到桌面上下文洞察，续聊工具记录显示在原会话轨迹。](docs/architecture.zh-CN.png)
 
 ## 快速开始
 

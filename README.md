@@ -14,7 +14,7 @@ In a synthetic run of that workflow, Codex audited the packet locally and assign
 
 ## Architecture
 
-![Codex coordinates direct work, Harness read-only reviews, and project edits, then verifies the delivered result](docs/architecture.en.png)
+![Codex supervises and verifies three execution routes. Completed Headless and Orchestrator sessions appear in Desktop Context Insights, with follow-ups in the same trace.](docs/architecture.en.png)
 
 ## Quick start
 
