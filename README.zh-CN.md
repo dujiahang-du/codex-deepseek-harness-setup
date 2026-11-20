@@ -6,6 +6,8 @@
 
 适用于范围明确的开发、发布核对、文档比对和批量审查。本集成支持 Windows x64，默认只读，已用 **DeepSeek Harness 0.2.2-rc.5** 验证。
 
+Headless 和 Orchestrator 任务结束后，会自动出现在 **Harness 桌面版 → 上下文洞察**。续聊的工具调用会追加到原会话轨迹。
+
 > 按已批准的规则核对这批发布资料。验证总量并引用表格原文，按需安排专业复核。保持输入只读，给出放行结论及依据。
 
 在一次合成数据测试中，Codex 本地核对后，又派一名 Harness 专家独立复核同样的九份文件。双方都发现正式更正将某地区的有效数量从 85 降到 79，比放行门槛少 1。Codex 核实证据后判定不能放行。
@@ -27,7 +29,7 @@ python .\install.py --harness-exe "<absolute path to DeepSeek Harness.exe>" --no
 
 4. 在要操作的项目中创建新的 Codex 聊天。你可以要求只读复核，也可以说明要[实现什么改动](#项目内修改)。可以用[合成数据验证](#用合成数据验证)分别测试两条路线。
 
-安装器按需获取固定版本的桥接器和锁定的依赖，使用 `~/.codex` 或已配置的 `CODEX_HOME`。升级已知版本时会备份 Worker 和策略。遇到冲突的自定义文件会保留。独立启动器及本机状态位于该目录下的 `integrations/dsh-orchestrator`。运行时复用本机安装的 Harness 及其登录状态。
+安装器按需获取固定版本的桥接器、锁定的依赖和桌面版上下文洞察 0.86.0，使用 `~/.codex` 或已配置的 `CODEX_HOME`。升级已知版本时会备份托管文件。遇到冲突的自定义文件会保留。独立启动器及本机状态位于该目录下的 `integrations/dsh-orchestrator`。运行时复用本机安装的 Harness 及其登录状态。
 
 | 安装组件 | 用途 |
 |---|---|
@@ -39,13 +41,13 @@ python .\install.py --harness-exe "<absolute path to DeepSeek Harness.exe>" --no
 
 | 参数 | 用途 |
 |---|---|
-| `--context-insights` | 在独立 Web 配置安装 `dsh-context 0.86.0`，用于浏览会话和轨迹。插件会请求公开元数据，并向所选提供方查询账户余额 |
+| `--context-insights` | 额外为可选的独立 Web 查看器安装上下文洞察 |
 | `--share-harness-skills` | 将你自己的 Harness Skill 目录链接到独立 Web 配置。使用前先检查将被委派任务访问的 Skill |
 | `--desktop-privacy` | 在桌面版已退出时应用[桌面隐私配置](privacy/desktop.patch.yml)，并备份现有覆盖文件。配置会停用额外会话日志上传、遥测、思考过程云端翻译，以及 Harness 反向派活给 Codex |
 
 ## Codex 如何分派任务
 
-Codex 直接处理简短检查，一次性的委派使用 Worker Skill。需要实时进度、原生轨迹或同会话续派的只读任务，使用 Orchestrator。默认用简体中文写会话标题、交接内容和结果。可在任务里指定其他语言。
+Codex 直接处理简短检查，一次性的委派使用 Worker Skill。需要实时进度或协调多轮续派的只读任务，使用 Orchestrator。默认用简体中文写会话标题、交接内容和结果。可在任务里指定其他语言。
 
 | 任务 | Harness 模式 | 模型与推理等级 |
 |---|---|---|
@@ -84,14 +86,16 @@ Orchestrator 的 `dsh_followup` 可在原任务补查。交接时只带下一位
 
 运行 `codex mcp get dsh_orchestrator` 查看 MCP 注册。执行过程中，Codex 可以通过 `dsh_status`、`dsh_wait` 和 `dsh_tail` 读取进度和事件。
 
-Orchestrator 按需在 `127.0.0.1` 启动 Harness Web。你可以照常使用 Harness 桌面版。要查看桥接任务在独立本机配置中的原生轨迹，在 PowerShell 运行以下命令，查看期间保留窗口。
+任务结束后，打开 **Harness 桌面版 → 上下文洞察 → 全部会话**，搜索标题，进入会话后选择 **轨迹**。列表可见时会自动刷新，通常在约 30 秒内更新。两条路线都可以直接在桌面回看。Orchestrator 保留独立的执行配置，任务结束后将会话日志发布到同一台电脑的桌面会话目录。
+
+Headless 续聊时用 `--session-id` 传入首次返回的 `session_id`，沿用原工作区和授权模式。Orchestrator 对原任务调用 `dsh_followup`。rc.5 实测确认，两条路线在桌面都能查看首次和续聊的工具记录。
+
+如需在浏览器里查看独立执行配置，可在安装时选择 `--context-insights`，再用 PowerShell 执行以下命令。查看期间保留窗口。
 
 ```powershell
 $codexConfig = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
 python (Join-Path $codexConfig 'integrations/dsh-orchestrator/launch.py') --view
 ```
-
-安装上下文洞察后，打开**上下文洞察 → 全部会话**，按标题找到会话并点**轨迹**。
 
 ## 用合成数据验证
 
@@ -125,14 +129,14 @@ $fixture
 
 Headless 和独立 Web 配置默认停用额外会话日志上报和反馈遥测。委派任务默认使用 Harness 原生只读权限。授权的 Headless 修改只在当次任务使用原生工作区写入。云模型调用会发送完成任务所需的提示与上下文，请按任务提供已授权的信息。需要数据留在本机时，使用已验证的本地推理与离线工具。 [Harness 隐私政策](https://www.deepseek.com/harness/privacy/) · [官方会话日志说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-log-deepseek/README.md)
 
-桌面插件、桌面 MCP、外部程序、账户和聊天记录分别在各自电脑上配置。换版本后用合成数据复验权限、选档和隐私设置。
+轨迹登记及 Orchestrator 已完成会话的副本都留在同一台电脑上。上下文洞察可能请求公开元数据，并向配置的提供方查询账户余额。各台电脑使用各自的账号、聊天记录和额外工具。换版本后用合成数据复验权限、选档和隐私设置。
 
 ## 回退
 
 退出相关 Codex 聊天与 Harness 窗口。运行 `codex mcp remove dsh_orchestrator` 移除注册。删除 `AGENTS.md` 中起始与结束标记之间的托管分派块。清理前先备份 Worker Skill、程序定位文件、独立配置及会话。
 
-如果要回退已知版本升级，用安装器报告的 Worker 和策略备份恢复。应用过桌面隐私配置时，恢复备份前先检查后续改动，也可以只撤销带标记的隐私配置块。
+回退已知版本升级前，先检查后续改动，再使用安装器报告的 Worker、策略、启动器和桌面 patch 备份。桌面轨迹注册和可选隐私设置都有独立的配置标记。回退配置时保留会话文件。
 
 ## 固定来源
 
-安装使用 [Fly2Kiana/Codex-DSH-Orchestrator](https://github.com/Fly2Kiana/Codex-DSH-Orchestrator) 的提交 `428c69f590d569b0c7cfbdb831bfa88beedc938b` 构建 Orchestrator。Harness 和可选社区插件遵循各自的许可及条款。
+安装器使用 [Fly2Kiana/Codex-DSH-Orchestrator](https://github.com/Fly2Kiana/Codex-DSH-Orchestrator) 的提交 `428c69f590d569b0c7cfbdb831bfa88beedc938b` 构建 Orchestrator，并安装[上下文洞察 0.86.0](https://www.npmjs.com/package/dsh-context/v/0.86.0)。组件保留上游许可。

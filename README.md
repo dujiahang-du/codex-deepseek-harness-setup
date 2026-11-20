@@ -6,6 +6,8 @@ Give Codex a task in plain language. It can handle a quick check, delegate a foc
 
 Use it for scoped development work, release checks, document comparisons, and batch file reviews. The setup uses Windows x64, defaults to read-only delegation, and has been tested with **DeepSeek Harness 0.2.2-rc.5**.
 
+Completed Headless and Orchestrator tasks appear automatically in **Harness Desktop → Context Insights**. A follow-up keeps its tool calls in the original session's trace.
+
 > Audit this release packet against the approved rules. Verify the totals and cite the source rows. Choose any specialist reviews you need, keep the inputs read-only, and show me the final decision and its evidence.
 
 In a synthetic run of that workflow, Codex audited the packet locally and assigned one Harness expert to review the same nine files independently. Both found that an approved correction brought one region from 85 to 79 units, one below its release gate. Codex verified the evidence and blocked the release.
@@ -27,7 +29,7 @@ python .\install.py --harness-exe "<absolute path to DeepSeek Harness.exe>" --no
 
 4. Start a new Codex chat in the project you want to work on. Ask for a read-only review or request a [project change](#authorized-project-changes). The [synthetic smoke tests](#verify-with-synthetic-data) cover both routes.
 
-Setup fetches the pinned bridge and its locked dependencies when needed. It uses `~/.codex` or your existing `CODEX_HOME`, backs up the Worker and policy when upgrading known versions, and preserves conflicting custom files. The isolated launcher and its local state live under `integrations/dsh-orchestrator` in that root. The launcher uses your installed Harness and its local sign-in.
+Setup fetches the pinned bridge, its locked dependencies, and Desktop Context Insights 0.86.0 when needed. It uses `~/.codex` or your existing `CODEX_HOME`, backs up managed files when upgrading known versions, and preserves conflicting custom files. The isolated launcher and its local state live under `integrations/dsh-orchestrator` in that root. The launcher uses your installed Harness and its local sign-in.
 
 | Installed component | What it does |
 |---|---|
@@ -39,13 +41,13 @@ Setup fetches the pinned bridge and its locked dependencies when needed. It uses
 
 | Flag | Behavior |
 |---|---|
-| `--context-insights` | Adds `dsh-context 0.86.0` to the isolated Web profile for browsing sessions and traces. The plugin requests public metadata and queries the configured provider for account balance. |
+| `--context-insights` | Also installs Context Insights in the optional isolated Web viewer. |
 | `--share-harness-skills` | Links your existing Harness Skill directory into the isolated Web profile. Review the skills before exposing them to delegated tasks. |
 | `--desktop-privacy` | Applies the [Desktop privacy overlay](privacy/desktop.patch.yml) while the app is closed and backs up an existing patch. The overlay disables additional session uploads, telemetry, cloud translation of reasoning, and reverse delegation to Codex. |
 
 ## How Codex delegates
 
-Codex handles small checks directly and uses the Worker Skill for one-off delegation. It uses Orchestrator for read-only work that needs progress updates, a native trace, or follow-ups. The supplied policy defaults to Simplified Chinese for titles, handoffs, and results. Ask for a different language in your task when needed.
+Codex handles small checks directly and uses the Worker Skill for one-off delegation. It uses Orchestrator for read-only work that needs live progress or coordinated follow-ups. The supplied policy defaults to Simplified Chinese for titles, handoffs, and results. Ask for a different language in your task when needed.
 
 | Task | Harness mode | Model and reasoning |
 |---|---|---|
@@ -82,14 +84,16 @@ A synthetic test exercised this path with eight JSON Pointer cases. Codex opened
 
 To confirm the MCP registration, run `codex mcp get dsh_orchestrator`. While a task runs, Codex can use `dsh_status`, `dsh_wait`, and `dsh_tail` to read progress and events.
 
-Orchestrator starts a Harness Web Host on `127.0.0.1` when needed. You can keep using Harness Desktop normally. Open the browser viewer when you want to inspect native traces from the bridge's separate local profile. Run the following command in PowerShell and keep the terminal open while you review.
+After a task finishes, open **Harness Desktop → Context Insights → All Sessions**. Search for the title, open the session, and select **Trace**. The list refreshes automatically while visible, typically within 30 seconds. Both routes use the same local Desktop view. Orchestrator keeps its execution profile separate and publishes completed session logs to the Desktop store on the same machine.
+
+To continue a Headless session, pass its returned `session_id` with `--session-id` and reuse the workspace and authorized mode. For Orchestrator, call `dsh_followup` on the same task. Tests on rc.5 confirmed that the Desktop trace shows tool calls from both rounds on each route.
+
+For an optional browser view of the isolated execution profile, install with `--context-insights` and run the following in PowerShell. Keep that terminal open while viewing it.
 
 ```powershell
 $codexConfig = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
 python (Join-Path $codexConfig 'integrations/dsh-orchestrator/launch.py') --view
 ```
-
-With Context Insights installed, open **Context Insights → All Sessions**, find the task by its title, and select **Trace**.
 
 ## Verify with synthetic data
 
@@ -123,14 +127,14 @@ Check that the Headless Worker used `workspace-write`, Harness created `tickets.
 
 Headless and isolated Web profiles disable additional session-log uploads and feedback telemetry by default. Delegated tasks default to Harness's native read-only permission. Authorized Headless changes use native workspace-write for that run. Cloud inference sends the prompt and context needed for the task. Supply excerpts you have authorized for that task. For work that must stay on the machine, use a verified local inference path and offline tools. [Harness privacy policy](https://www.deepseek.com/harness/privacy/) · [Official session-log documentation](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-log-deepseek/README.md)
 
-Desktop plugins, desktop MCP servers, external programs, accounts, and chat histories are configured on each machine. After changing versions, use synthetic data to recheck permissions, routing, and privacy behavior.
+Trace registration and the copy of a completed Orchestrator session stay on the same machine. Context Insights can request public metadata and query the configured provider for account balance. Each machine uses its own accounts, chat history, and additional tools. After changing versions, use synthetic data to recheck permissions, routing, and privacy behavior.
 
 ## Roll back
 
 Exit the relevant Codex chats and Harness windows. Run `codex mcp remove dsh_orchestrator` to remove the registration. Remove the managed delegation block between its start and end markers in `AGENTS.md`. Back up the Worker Skill, executable locator, isolated profile, and sessions before removing any data you no longer need.
 
-To roll back a known upgrade, use the Worker and policy backups printed by setup. If you applied the Desktop privacy overlay, check for subsequent edits before restoring its backup, or undo just the marked privacy block.
+To roll back a known upgrade, check for subsequent edits and use the Worker, policy, launcher, and Desktop patch backups printed by setup. The Desktop patch has separately marked blocks for trace registration and optional privacy settings. Keep the session files when rolling back the configuration.
 
 ## Pinned source
 
-Setup builds Orchestrator from [Fly2Kiana/Codex-DSH-Orchestrator](https://github.com/Fly2Kiana/Codex-DSH-Orchestrator) at commit `428c69f590d569b0c7cfbdb831bfa88beedc938b`. Harness and optional community plugins remain subject to their upstream terms.
+Setup builds Orchestrator from [Fly2Kiana/Codex-DSH-Orchestrator](https://github.com/Fly2Kiana/Codex-DSH-Orchestrator) at commit `428c69f590d569b0c7cfbdb831bfa88beedc938b` and installs [Context Insights 0.86.0](https://www.npmjs.com/package/dsh-context/v/0.86.0). These components retain their upstream licenses.

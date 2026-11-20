@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from uuid import uuid4
 
 
 VERSION = "0.2.2-rc.5"
@@ -98,10 +99,24 @@ def summarize(output, exit_code):
     return {"session_id": session_id, "status": reason, "tools": list(tools.values()), "answer": answer}
 
 
+def notify_desktop(session_id, env):
+    home = Path(env.get("DSH_HOME") or (Path.home() / ".dsh"))
+    state = home / "storages" / "dsh-codex-desktop-trace" / "notices"
+    state.mkdir(parents=True, exist_ok=True)
+    nonce = uuid4().hex
+    staging = state / (nonce + ".tmp")
+    try:
+        staging.write_text(json.dumps({"id": session_id, "nonce": nonce}), encoding="utf-8")
+        staging.replace(state / (session_id + ".json"))
+    finally:
+        staging.unlink(missing_ok=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--harness-exe", help="Override the path to the native Harness executable")
     parser.add_argument("--cwd", type=Path, required=True, help="Absolute project or fixture directory")
+    parser.add_argument("--session-id", help="Continue an existing native Headless session in the same workspace")
     parser.add_argument("--role", help="Expert role for this delegation")
     parser.add_argument("--workspace-write", action="store_true",
                         help="Use native workspace-write for explicitly authorized project edits")
@@ -116,6 +131,8 @@ def main():
     cwd = args.cwd.resolve(strict=True)
     if not cwd.is_dir() or args.timeout <= 0:
         raise ValueError("The working directory must exist and the timeout must be positive.")
+    if args.session_id and not re.fullmatch(r"session-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", args.session_id):
+        raise ValueError("Use a native Harness session ID from an earlier Headless invocation.")
     for skill_id in args.skill:
         if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", skill_id):
             raise ValueError("Use the English kebab-case ID for each Harness Skill.")
@@ -145,10 +162,17 @@ def main():
         patch = Path(temporary) / "route.patch.yml"
         write_overlay(patch, mode, model, effort)
         command = [str(exe), "--expose-internals", str(cli), "--profile", "headless",
-                   "--patch", str(patch), "--permission-mode", permission, "--approval-policy", "never", "--json", "-"]
+                   "--patch", str(patch), "--permission-mode", permission, "--approval-policy", "never", "--json"]
+        if args.session_id:
+            command.extend(["--session-id", args.session_id])
+        command.append("-")
         run = subprocess.run(command, cwd=cwd, env=env, input=prompt.encode("utf-8"),
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=args.timeout)
     result = summarize(run.stdout.decode("utf-8-sig", errors="replace"), run.returncode)
+    try:
+        notify_desktop(result["session_id"], env)
+    except OSError as error:
+        print(f"Desktop trace refresh signal was not sent ({type(error).__name__}).", file=sys.stderr)
     result["route"] = {"task_kind": args.task_kind, "mode": mode, "provider": PROVIDER, "model": model,
                        "reasoning_effort": effort, "permission": permission}
     if args.workspace_write:

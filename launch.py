@@ -83,8 +83,12 @@ def main():
     shared_agents = Path(cfg["agents_home"]).resolve()
     host_env = {**filtered_env(), "ELECTRON_RUN_AS_NODE": "1", "DSH_HOME": str(dsh_home),
                 "DSH_AGENTS_HOME": str(shared_agents), "DSH_PERMISSION_MODE": "read-only"}
+    patch_args = []
+    if not args.view:
+        host_env["DSH_TRACE_PUBLISH_HOME"] = str(Path(cfg.get("desktop_home", Path.home() / ".dsh")).resolve())
+        patch_args = ["--patch", str(BASE / "desktop-trace.patch.yml")]
     host = subprocess.Popen(
-        [str(exe), "--expose-internals", str(native_cli), "--profile", "web", "--host", "127.0.0.1",
+        [str(exe), "--expose-internals", str(native_cli), "--profile", "web", *patch_args, "--host", "127.0.0.1",
          "--port", "0", "--no-open"], cwd=BASE, env=host_env, stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding="utf8", errors="replace",
     )
