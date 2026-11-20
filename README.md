@@ -1,5 +1,7 @@
 # Codex + DeepSeek Harness
 
+**English** · [简体中文](README.zh-CN.md)
+
 Give Codex a task in plain language. It can handle a quick check, delegate a focused review, or coordinate several DeepSeek Harness experts. When you ask for an implementation, fix, or saved deliverable, Codex can delegate the work to Harness in the current project. Codex sets the scope and verifies the result.
 
 Use it for scoped development work, release checks, document comparisons, and batch file reviews. The setup uses Windows x64, defaults to read-only delegation, and has been tested with **DeepSeek Harness 0.2.2-rc.5**.
@@ -7,6 +9,10 @@ Use it for scoped development work, release checks, document comparisons, and ba
 > Audit this release packet against the approved rules. Verify the totals and cite the source rows. Choose any specialist reviews you need, keep the inputs read-only, and show me the final decision and its evidence.
 
 In a synthetic run of that workflow, Codex audited the packet locally and assigned one Harness expert to review the same nine files independently. Both found that an approved correction brought one region from 85 to 79 units, one below its release gate. Codex verified the evidence and blocked the release.
+
+## Architecture
+
+![Codex coordinates direct work, Harness read-only reviews, and project edits, then verifies the delivered result](docs/architecture.en.png)
 
 ## Quick start
 
