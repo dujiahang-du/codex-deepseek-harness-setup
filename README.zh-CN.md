@@ -148,3 +148,7 @@ Headless 和独立 Web 配置默认停用额外会话日志上报和反馈遥测
 ## 固定来源
 
 安装器使用 [Fly2Kiana/Codex-DSH-Orchestrator](https://github.com/Fly2Kiana/Codex-DSH-Orchestrator) 的提交 `428c69f590d569b0c7cfbdb831bfa88beedc938b` 构建 Orchestrator，并安装[上下文洞察 0.86.0](https://www.npmjs.com/package/dsh-context/v/0.86.0)。组件保留上游许可。
+
+## 许可证
+
+本项目的原创代码和文档采用 [MIT 许可](LICENSE)。随包分发或引用的第三方组件适用各自的许可，见[第三方许可声明](THIRD_PARTY_NOTICES.md)。

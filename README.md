@@ -146,3 +146,7 @@ To roll back a known upgrade, check for subsequent edits and use the Worker, pol
 ## Pinned source
 
 Setup builds Orchestrator from [Fly2Kiana/Codex-DSH-Orchestrator](https://github.com/Fly2Kiana/Codex-DSH-Orchestrator) at commit `428c69f590d569b0c7cfbdb831bfa88beedc938b` and installs [Context Insights 0.86.0](https://www.npmjs.com/package/dsh-context/v/0.86.0). These components retain their upstream licenses.
+
+## License
+
+The original code and documentation in this project are available under the [MIT License](LICENSE). For bundled or referenced third-party components, see [Third-Party Notices](THIRD_PARTY_NOTICES.md).
