@@ -180,6 +180,22 @@ def main():
     ] if part)
     mode, model, effort = ROUTES[args.task_kind]
     env = {**os.environ, "ELECTRON_RUN_AS_NODE": "1", "DSH_PERMISSION_MODE": permission}
+    # Codex Sites Git overrides are private to its own transport. Harness filters
+    # KEY variables from shell environments, leaving an invalid Git config array.
+    sites_keys = {
+        f"{section}.https://{host}/backend-api/codex/sites/git/.{option}"
+        for host in ("chatgpt.com", "chatgpt-staging.com")
+        for section, option in (("credential", "helper"), ("credential", "useHttpPath"),
+                                ("http", "proactiveAuth"), ("http", "followRedirects"))
+    }
+    count = env.get("GIT_CONFIG_COUNT", "")
+    if count.isascii() and count.isdecimal() and len(count) < 5:
+        indices = range(int(count))
+        if indices and all(env.get(f"GIT_CONFIG_KEY_{i}") in sites_keys for i in indices):
+            del env["GIT_CONFIG_COUNT"]
+            for i in indices:
+                env.pop(f"GIT_CONFIG_KEY_{i}")
+                env.pop(f"GIT_CONFIG_VALUE_{i}", None)
     with tempfile.TemporaryDirectory(prefix="dsh-worker-") as temporary:
         patch = Path(temporary) / "route.patch.yml"
         write_overlay(patch, mode, model, effort)
