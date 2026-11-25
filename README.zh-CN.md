@@ -50,10 +50,13 @@ python .\install.py --harness-exe "<absolute path to DeepSeek Harness.exe>" --no
 
 ## Codex 如何分派任务
 
-Codex 直接处理简短检查，一次性的委派使用 Worker Skill。需要实时进度或协调多轮续派的只读任务，使用 Orchestrator。所选语言覆盖会话标题、实际发给 Harness 子专家的提示词和汇报。安装时用 `--language zh-CN` 选简体中文，或用 `--language en` 选英文。默认 `--language auto` 跟随对话。可带所选参数和 `--apply` 重新运行安装脚本切换。任务明确指定的语言优先，工具名、代码和引用的错误原文保留。
+你说「帮我修好」或「把这个功能做出来」，Codex 会把能独立完成的部分交给 Harness 在项目里写，再核对文件差异、运行相关检查。你说「先分析，给个方案」，这一步就保持只读。需要独立判断或项目规则要求时，Codex 才另外安排复核。
+
+Codex 直接处理简短检查，一次性的委派使用 Worker Skill。需要实时进度或协调多轮续派的任务，使用 Orchestrator。所选语言覆盖会话标题、实际发给 Harness 子专家的提示词和汇报。安装时用 `--language zh-CN` 选简体中文，或用 `--language en` 选英文。默认 `--language auto` 跟随对话。可带所选参数和 `--apply` 重新运行安装脚本切换。任务明确指定的语言优先，工具名、代码和引用的错误原文保留。
 
 | 任务 | Harness 模式 | 模型与推理等级 |
 |---|---|---|
+| 在授权项目内实现、修复或保存交付物（`workspace-write`） | 标准 | Flash / High |
 | 定点查值或提取字段 | 标准 | Flash / Low |
 | 比对文档或归纳日志 | 标准 | Flash / High |
 | 批量读取、筛选或汇总独立输入 | PTC | Flash / High |
@@ -68,7 +71,7 @@ Orchestrator 支持四种模式。Windows x64 Harness 0.2.2-rc.5 的安装器会
 
 要求实现功能、修复问题或保存交付物，通常已包含完成该任务所需的当前项目写入。Codex 判断是否委派，并核对项目规则、既有改动和可修改文件。只有写入范围存在实质疑问时才另外确认。
 
-标准和 PTC 可走 Headless Worker。四种模式都可以走 Orchestrator，使用 `permissionMode: workspace-write` 和 `workspaceMode: exclusive-write` 在当前项目内写入。PTC 或极简子进程遇到 Windows 工作区 ACL 阻断时，Codex 可保持原项目授权，切换到标准模式的原生文件工具完成交付。专家统一报告实际改动、检查结果和阻塞，Codex 核对落盘文件与差异后验收。
+标准和 PTC 可走 Headless Worker。四种模式都可以走 Orchestrator，使用 `permissionMode: workspace-write` 和 `workspaceMode: exclusive-write` 在当前项目内写入。PTC 或极简子进程遇到 Windows 工作区 ACL 阻断时，Codex 可保持原项目授权，切换到标准模式的原生文件工具完成交付。Harness 专家在项目内完成改动，并统一报告实际修改的文件、检查结果和阻塞。Codex 核对落盘文件与差异后验收。
 
 查看、审阅、分析和给方案默认 `read-only`。Orchestrator 在派发首轮前核对实际生效的原生权限。用户明确授权当次任务后，四种模式均可选择完全权限 `danger-full-access`，并搭配独占工作区声明。变更权限时新建任务。安装、提交和发布分别按实际任务授权执行。
 

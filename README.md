@@ -50,10 +50,13 @@ Configure desktop app MCP connections on the machine where those apps are instal
 
 ## How Codex delegates
 
-Codex handles small checks directly and uses the Worker Skill for one-off delegation. It uses Orchestrator for read-only work that needs live progress or coordinated follow-ups. The selected language applies to titles, prompts sent to Harness child agents, and reports. Run the installer with `--language auto`, `--language zh-CN`, or `--language en` and `--apply` to change it. An explicit request in a task takes precedence. Tools, code, and quoted errors keep their original spelling.
+Ask Codex to fix a bug or finish a feature and it delegates work that Harness can complete in the project. Harness edits the files. Codex checks the diff and runs the relevant checks. Asking for an analysis or a plan keeps the task read-only. Codex adds a separate reviewer when the task or project rules call for one.
+
+Codex handles small checks directly and uses the Worker Skill for one-off delegation. It uses Orchestrator for work that needs live progress or coordinated follow-ups. The selected language applies to titles, prompts sent to Harness child agents, and reports. Run the installer with `--language auto`, `--language zh-CN`, or `--language en` and `--apply` to change it. An explicit request in a task takes precedence. Tools, code, and quoted errors keep their original spelling.
 
 | Task | Harness mode | Model and reasoning |
 |---|---|---|
+| Implement, fix, or save an in-project deliverable (`workspace-write`) | Standard | Flash / High |
 | Look up values or extract specific fields | Standard | Flash / Low |
 | Compare documents or summarize logs | Standard | Flash / High |
 | Read, filter, or summarize a batch of independent inputs | PTC | Flash / High |
@@ -66,7 +69,7 @@ All four modes are available through Orchestrator. On Windows x64 Harness 0.2.2-
 
 ### Authorized project changes
 
-An ordinary request to implement, fix, or save a deliverable authorizes the needed edits within the current project. Codex checks the project rules, existing changes, and allowed files. It can use the Headless Worker for Standard or PTC, or delegate any of the four modes through Orchestrator with `permissionMode: workspace-write` and `workspaceMode: exclusive-write`. If the PTC or Minimal subprocess cannot acquire the Windows workspace ACL, Codex can continue in Standard with native file tools under the same project scope. The expert reports changed files, checks, and blockers together. Codex checks the files and diff before accepting the result.
+An ordinary request to implement, fix, or save a deliverable authorizes the needed edits within the current project. Codex checks the project rules, existing changes, and allowed files. It can use the Headless Worker for Standard or PTC, or delegate any of the four modes through Orchestrator with `permissionMode: workspace-write` and `workspaceMode: exclusive-write`. If the PTC or Minimal subprocess cannot acquire the Windows workspace ACL, Codex can continue in Standard with native file tools under the same project scope. The Harness expert makes the changes in the project and reports the files it changed, the checks it ran, and any blockers. Codex checks the files and diff before accepting the result.
 
 Requests to inspect, review, analyze, or propose changes default to `read-only`. Orchestrator verifies the native permission before the first prompt. Full access (`danger-full-access`) is available for any mode with explicit task authorization and the exclusive workspace claim. Start a new task to change permissions. Installs, commits, and publication each follow the task's authorization.
 
